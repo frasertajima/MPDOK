@@ -2,6 +2,7 @@
 
 **Date**: May 2026  
 **Context**: Following completion of tensor_core_engine_v5 (cuBLAS-lt epilogue fusion, benchmarked).  
+
 **Question posed**: Can the tensor core engine accelerate iterative solvers in a way that creates value for users who are not GPU experts?
 
 ---
