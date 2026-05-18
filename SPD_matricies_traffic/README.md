@@ -14,6 +14,11 @@ open http://localhost:8787/
 
 https://youtu.be/KrntvCQsgPM?si=teRepHLoSwUZuuQ5
 
+<img width="1857" height="939" alt="image" src="https://github.com/user-attachments/assets/b418a5e6-d6ef-47ec-9459-4cf776f5bb8d" />
+
+N=256K (for OOM-SSD) will take 350 minutes before the first cycle as it has to process 262GB of data (but at least the startup is quick).
+
+
 ---
 
 ## What you are watching
