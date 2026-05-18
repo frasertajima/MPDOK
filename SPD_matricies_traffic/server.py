@@ -60,7 +60,7 @@ OOC_TILE = 512  # rows per OOC tile (safe for 4 GB VRAM)
 OOC_RESTART = 20  # inner GMRES restart (less VRAM for Krylov basis)
 OOC_OUTER = 5  # outer iterations
 OOC_TOL = 5e-3  # tighter than observation noise → good enough visually
-OOC_SSD_PATH = "/tmp/mpdok_kernel.bin"  # ← SSD streaming scratch file
+OOC_SSD_PATH = str(_SELF / "mpdok_kernel.bin")  # ← SSD streaming scratch file (needs 262+ GB free)
 
 N_TRAIL = 5  # number of tracked (highlighted) vehicles
 TRAIL_LEN = 80  # positions kept per vehicle trail
