@@ -11,6 +11,8 @@ python server.py          # edit N_VEHICLES at the top first
 open http://localhost:8787/
 ```
 
+https://youtu.be/KrntvCQsgPM?si=teRepHLoSwUZuuQ5
+
 ---
 
 ## What you are watching
