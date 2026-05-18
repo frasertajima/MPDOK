@@ -17,7 +17,7 @@ https://youtu.be/KrntvCQsgPM?si=teRepHLoSwUZuuQ5
 
 ## What you are watching
 
-128,000 simulated vehicles drive around a 100 × 100 km model of Metro Vancouver.
+64,000 simulated vehicles drive around a 100 × 100 km model of Metro Vancouver.
 Each vehicle is a **probe sensor**: it knows its GPS position and reports one noisy scalar —
 its local traffic congestion level.  Every assimilation cycle the system:
 
