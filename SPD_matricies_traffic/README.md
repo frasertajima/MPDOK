@@ -3,7 +3,8 @@
 A real-time Gaussian Process traffic assimilation demo over a fleet of up to **128,000
 simulated probe vehicles**, solved with a custom mixed-precision GMRES iterative-refinement
 engine (TF32 tensor cores + FP64 outer corrections) that handles problem sizes no
-mainstream solver can touch on consumer hardware.
+mainstream solver can touch on consumer hardware. For N > 128K, MPDOK streams from SSD (e.g., 4TB)
+with reduced speed.
 
 ```
 cd MPDOK/SPD_matrices_traffic
