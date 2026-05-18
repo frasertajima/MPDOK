@@ -53,14 +53,16 @@ except ImportError:
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 PORT = 8787
-N_VEHICLES = 256_000  # ← change me
+N_VEHICLES = 16_000  # ← change me
 NX, NY = 64, 64  # reconstruction grid
 ANIM_HZ = 5  # vehicle animation rate (Hz) — independent of solve speed
 OOC_TILE = 512  # rows per OOC tile (safe for 4 GB VRAM)
 OOC_RESTART = 20  # inner GMRES restart (less VRAM for Krylov basis)
 OOC_OUTER = 5  # outer iterations
 OOC_TOL = 5e-3  # tighter than observation noise → good enough visually
-OOC_SSD_PATH = str(_SELF / "mpdok_kernel.bin")  # ← SSD streaming scratch file (needs 262+ GB free)
+OOC_SSD_PATH = str(
+    _SELF / "mpdok_kernel.bin"
+)  # ← SSD streaming scratch file (needs 262+ GB free)
 
 N_TRAIL = 5  # number of tracked (highlighted) vehicles
 TRAIL_LEN = 80  # positions kept per vehicle trail
@@ -75,10 +77,13 @@ _ram_bytes = _fp32_bytes  # same size needed for store='ram'
 USE_OOC = _fp32_bytes > _vram_total * 0.60
 # Use SSD streaming when matrix also exceeds available system RAM
 import psutil as _psutil
+
 USE_SSD = USE_OOC and _ram_bytes > _psutil.virtual_memory().available * 0.80
 OOC_STORE = "ssd" if USE_SSD else "ram"
 
-SOLVER_MODE = 2 if USE_SSD else (1 if USE_OOC else 0)  # 0=standard, 1=ooc-ram, 2=ooc-ssd
+SOLVER_MODE = (
+    2 if USE_SSD else (1 if USE_OOC else 0)
+)  # 0=standard, 1=ooc-ram, 2=ooc-ssd
 
 
 # ── Shared state ──────────────────────────────────────────────────────────────
@@ -153,116 +158,20 @@ state = SimState()
 
 
 def _run_startup_benchmark():
-    """
-    1. Probe CuPy (expect OOM for large N).
-    2. Estimate SciPy time by scaling from N=6k result.
-    3. Time one MPDOK solve (standard or OOC) to set baseline_speedup.
-    """
     fp64_gb = N_VEHICLES**2 * 8 / 1e9
     fp32_gb = N_VEHICLES**2 * 4 / 1e9
     vram_gb = _vram_total / 1e9
+    _smode = "OOC-SSD" if USE_SSD else ("OOC-RAM" if USE_OOC else "standard MPDOK")
     print(
         f"  Matrix: {N_VEHICLES:,}×{N_VEHICLES:,}  "
         f"FP64={fp64_gb:.1f}GB  FP32={fp32_gb:.1f}GB  VRAM={vram_gb:.1f}GB"
     )
-    _smode = "OOC-SSD" if USE_SSD else ("OOC-RAM" if USE_OOC else "standard MPDOK")
     print(f"  Solver: {_smode}")
-
-    # ── CuPy probe ────────────────────────────────────────────────────────────
-    print("\n  [CuPy probe] attempting cp.linalg.solve ...")
-    try:
-        A_test = cp.eye(min(N_VEHICLES, 100), dtype=cp.float64)
-        _A_big = cp.zeros((N_VEHICLES, N_VEHICLES), dtype=cp.float32)
-        del _A_big
-        state.cupy_oom = False
-        print("  [CuPy probe] allocation succeeded")
-    except cp.cuda.memory.OutOfMemoryError:
-        state.cupy_oom = True
-        print(
-            f"  [CuPy probe] ✗ OutOfMemoryError — "
-            f"{fp32_gb:.1f} GB FP32 > {vram_gb:.1f} GB VRAM"
-        )
-    cp.get_default_memory_pool().free_all_blocks()
-
-    # ── SciPy estimate (scale from N=6k: 1.6s → O(N³)) ──────────────────────
-    # N=6000 SciPy: ~1.6s → scale: (N/6000)^3 × 1.6
+    state.cupy_oom = USE_OOC  # OOM is certain if we can't fit in VRAM
     scipy_ref_s, N_ref = 1.6, 6_000
-    est = scipy_ref_s * (N_VEHICLES / N_ref) ** 3
-    state.scipy_est_s = est
-    print(f"  [SciPy estimate] ~{_fmt_time(est)} (O(N³) from N={N_ref:,} baseline)")
-
-    # ── MPDOK baseline ────────────────────────────────────────────────────────
-    print(f"\n  [MPDOK] warming up ...")
-    fleet_tmp = Fleet(N=N_VEHICLES, seed=0)
-    field_tmp = TrafficField()
-    y = fleet_tmp.measure(field_tmp)
-    coords = cp.asarray(fleet_tmp.positions, dtype=cp.float64)
-
-    if USE_OOC:
-        ooc = MPDOKOOCSolver(tile_rows=OOC_TILE)
-        t0 = time.perf_counter()
-        ooc.build(
-            coords, gamma=_DEFAULT_GAMMA, reg=_DEFAULT_REG,
-            store=OOC_STORE, path=OOC_SSD_PATH if USE_SSD else None, verbose=False
-        )
-        build_s = time.perf_counter() - t0
-        print(f"  [MPDOK OOC] build: {build_s:.1f}s")
-
-        t0 = time.perf_counter()
-        b = cp.asarray(y, dtype=cp.float64)
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", RuntimeWarning)
-            x = ooc.solve(
-                b,
-                tol=OOC_TOL,
-                maxiter_outer=OOC_OUTER,
-                restart=OOC_RESTART,
-                verbose=True,
-            )
-        solve_s = time.perf_counter() - t0
-        cycle_s = build_s + solve_s
-        ooc.free()
-    else:
-        a = state.assimilator
-        # warm CUDA handles
-        _aw = cp.eye(128, dtype=cp.float64, order="F")
-        _ = a._solver.solve(_aw, cp.ones(128, dtype=cp.float64))
-        cp.cuda.Stream.null.synchronize()
-        A, _ = a.build_matrix(fleet_tmp.positions)
-        t0 = time.perf_counter()
-        xm = a.solve_mpdok(A, y)
-        cp.cuda.Stream.null.synchronize()
-        mpdok_ms = (time.perf_counter() - t0) * 1e3
-        build_s = 0.039  # approx N=6k build in seconds
-        solve_s = mpdok_ms / 1e3
-        cycle_s = solve_s
-
-        # compare against scipy for the speedup badge
-        t0 = time.perf_counter()
-        xs = a.solve_scipy(A, y)
-        scipy_ms = (time.perf_counter() - t0) * 1e3
-        state.scipy_ms = scipy_ms
-        rel = float(np.linalg.norm(cp.asnumpy(xm) - xs) / np.linalg.norm(xs))
-        state.rel_error = rel
-        spd = scipy_ms / mpdok_ms
-        state.baseline_speedup = spd
-        print(
-            f"  [MPDOK std] {mpdok_ms:.0f}ms  SciPy {scipy_ms:.0f}ms  "
-            f"speedup {spd:.1f}×  rel_err {rel:.2e}"
-        )
-
-    if USE_OOC:
-        # Speedup vs SciPy estimated
-        spd = state.scipy_est_s / cycle_s if cycle_s > 0 else 1.0
-        state.baseline_speedup = spd
-        state.cycle_s = cycle_s
-        print(
-            f"  [MPDOK OOC] cycle {_fmt_time(cycle_s)}  "
-            f"vs SciPy est {_fmt_time(state.scipy_est_s)}  "
-            f"speedup {spd:.1f}×"
-        )
-
-    del fleet_tmp
+    state.scipy_est_s = scipy_ref_s * (N_VEHICLES / N_ref) ** 3
+    print(f"  [SciPy estimate] ~{_fmt_time(state.scipy_est_s)} (O(N³) from N={N_ref:,} baseline)")
+    print(f"  [MPDOK] solve loop starting — metrics update after first cycle.")
 
 
 def _fmt_time(s):
@@ -434,6 +343,8 @@ def solve_loop():
             state.assim_step += 1
             state._assim_ts = time.perf_counter()
             state.elapsed_assim_s = 0.0
+            if solve_s > 0 and state.scipy_est_s > 0:
+                state.baseline_speedup = state.scipy_est_s / solve_s
 
         if USE_OOC:
             print(
