@@ -1,0 +1,671 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Acoustic Scattering Lab</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+    background:#0d0d1a; color:#dde;
+    font-family:"Segoe UI",system-ui,sans-serif;
+    overflow:hidden; height:100vh; display:flex; flex-direction:column;
+}
+
+/* ── Controls bar ── */
+#controls {
+    display:flex; align-items:center; flex-wrap:wrap;
+    gap:8px; padding:6px 12px;
+    background:#111827; border-bottom:1px solid #1f2a40; flex-shrink:0;
+}
+#controls label { font-size:12px; color:#8899bb; white-space:nowrap; }
+#controls select, #controls button {
+    background:#1a2a45; color:#ccd; border:1px solid #2a3a5a;
+    padding:3px 8px; border-radius:4px; font-size:12px; cursor:pointer;
+}
+#controls button:hover   { background:#243355; }
+#controls button.active  { background:#c0392b; border-color:#c0392b; color:#fff; }
+#controls button.fon-act { background:#27ae60; border-color:#27ae60; color:#fff; }
+#controls input[type=range] { width:80px; vertical-align:middle; accent-color:#4a9eff; }
+.val { color:#7fb3ff; font-weight:600; font-family:monospace; min-width:3ch; display:inline-block; }
+.sep { width:1px; height:20px; background:#1f2a40; flex-shrink:0; }
+
+/* ── Main area ── */
+#main { flex:1; display:flex; overflow:hidden; background:#0a0a14; }
+#canvas-wrap {
+    flex:1; display:flex; align-items:center; justify-content:center;
+    position:relative; overflow:hidden;
+}
+#field-canvas { image-rendering:pixelated; cursor:crosshair; border-radius:4px; display:block; }
+
+/* ── Right sidebar ── */
+#sidebar {
+    width:200px; flex-shrink:0; background:#111827;
+    border-left:1px solid #1f2a40;
+    display:flex; flex-direction:column; overflow:hidden;
+}
+
+/* Power panel */
+#power-panel {
+    padding:10px 10px 8px;
+    border-bottom:1px solid #1f2a40;
+    flex-shrink:0;
+}
+#power-panel h3 { font-size:10px; text-transform:uppercase; letter-spacing:1px; color:#445; margin-bottom:6px; }
+#power-number {
+    font-size:28px; font-weight:700; font-family:monospace;
+    text-align:center; letter-spacing:-1px; margin-bottom:5px;
+    transition: color 0.3s;
+}
+#power-bar-wrap { background:#1a2040; border-radius:3px; height:6px; margin-bottom:6px; overflow:hidden; }
+#power-bar { height:100%; border-radius:3px; width:50%; transition:width 0.2s, background 0.2s; }
+#sparkline-canvas { width:100%; height:48px; display:block; }
+
+/* Optimiser panel */
+#opt-panel {
+    padding:8px 10px;
+    border-bottom:1px solid #1f2a40;
+    flex-shrink:0;
+}
+#opt-panel h3 { font-size:10px; text-transform:uppercase; letter-spacing:1px; color:#445; margin-bottom:6px; }
+#opt-btns { display:flex; gap:5px; margin-bottom:6px; }
+#btn-optimise {
+    flex:1; background:#1a3550; color:#4af; border:1px solid #2a5570;
+    border-radius:4px; font-size:12px; padding:4px; cursor:pointer; font-weight:600;
+}
+#btn-optimise:hover   { background:#1f4060; }
+#btn-optimise.running { background:#7d3c98; border-color:#9b59b6; color:#e8d5ff; }
+#btn-stop-opt {
+    background:#2a1a1a; color:#c0392b; border:1px solid #5a2a2a;
+    border-radius:4px; font-size:12px; padding:4px 8px; cursor:pointer;
+}
+#btn-stop-opt:hover { background:#3a1a1a; }
+#opt-status { font-size:11px; color:#556; font-family:monospace; min-height:16px; }
+#opt-best   { font-size:11px; color:#2ecc71; font-family:monospace; min-height:16px; }
+
+/* Shape list */
+#shape-list { flex:1; display:flex; flex-direction:column; padding:8px; gap:5px; overflow-y:auto; }
+#shape-list h3 { font-size:10px; text-transform:uppercase; letter-spacing:1px; color:#445; padding-bottom:4px; border-bottom:1px solid #1f2a40; }
+.shape-row {
+    display:flex; align-items:center; gap:6px; padding:4px 5px;
+    border-radius:4px; cursor:pointer; border:1px solid transparent;
+    font-size:12px; color:#aab;
+}
+.shape-row:hover    { background:#1a2a40; }
+.shape-row.selected { background:#1a2a40; border-color:#2a4a6a; color:#dde; }
+.shape-dot { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+.shape-name { flex:1; }
+.shape-remove { background:none; border:none; color:#334; font-size:14px; cursor:pointer; padding:0 2px; line-height:1; }
+.shape-remove:hover { color:#e74c3c; }
+#shape-add-row { display:flex; gap:4px; align-items:center; margin-top:2px; }
+#shape-add-row select {
+    flex:1; background:#1a2a45; color:#aab; border:1px solid #2a3a5a;
+    border-radius:4px; font-size:11px; padding:3px 4px;
+}
+#btn-add-shape {
+    background:#1a3a5a; color:#4af; border:1px solid #2a5a8a;
+    border-radius:4px; font-size:14px; padding:1px 8px; cursor:pointer; font-weight:bold;
+}
+#btn-add-shape:hover { background:#1f4a6a; }
+
+/* Status bar */
+#status {
+    display:flex; align-items:center; gap:14px;
+    padding:4px 12px; background:#111827; border-top:1px solid #1f2a40;
+    font-size:11px; font-family:"JetBrains Mono",monospace; color:#4455aa; flex-shrink:0;
+}
+#status .hi   { color:#ccd; font-weight:600; }
+#status .good { color:#2ecc71; font-weight:600; }
+#status .warn { color:#e67e22; font-weight:600; }
+#status .dim  { color:#334; }
+</style>
+</head>
+<body>
+
+<div id="controls">
+    <label>Display:
+        <select id="sel-display">
+            <option value="re"        selected>Re(p) — waves</option>
+            <option value="intensity">|p|² — intensity</option>
+            <option value="im"       >Im(p) — quadrature</option>
+            <option value="abs"      >|p|  — amplitude</option>
+            <option value="phase"    >Phase</option>
+        </select>
+    </label>
+    <div class="sep"></div>
+    <label>k:
+        <input type="range" id="sl-k" min="1" max="30" step="0.1" value="8"/>
+        <span class="val" id="k-val">8.0</span>
+        <span style="font-size:11px;color:#556;margin-left:2px" id="lambda-lbl">λ=0.79</span>
+    </label>
+    <button id="btn-sweep-k">▶ k</button>
+    <label style="font-size:11px">Δ:<input type="range" id="sl-dk" min="1" max="20" value="4" style="width:50px"/>
+        <span class="val" id="dk-val">0.08</span></label>
+    <div class="sep"></div>
+    <label>α:
+        <input type="range" id="sl-alpha" min="0" max="360" step="1" value="0"/>
+        <span class="val" id="alpha-val">0°</span>
+    </label>
+    <button id="btn-sweep-alpha">▶ α</button>
+    <div class="sep"></div>
+    <label>Panels:
+        <input type="range" id="sl-panels" min="60" max="400" step="10" value="200"/>
+        <span class="val" id="panels-val">200</span>
+    </label>
+    <div class="sep"></div>
+    <button id="btn-solver">SciPy</button>
+    <button id="btn-gpu" class="active">GPU: On</button>
+</div>
+
+<div id="main">
+    <div id="canvas-wrap">
+        <canvas id="field-canvas" width="256" height="256"></canvas>
+    </div>
+
+    <div id="sidebar">
+
+        <!-- Power gauge -->
+        <div id="power-panel">
+            <h3>Field Intensity  |p|²</h3>
+            <div id="power-number">—</div>
+            <div id="power-bar-wrap"><div id="power-bar"></div></div>
+            <div id="power-scatter-lbl" style="font-size:10px;color:#446;text-align:right;font-family:monospace;margin-top:2px">scatter: —</div>
+            <canvas id="sparkline-canvas" width="180" height="48"></canvas>
+        </div>
+
+        <!-- Optimiser -->
+        <div id="opt-panel">
+            <h3>Optimise Positions</h3>
+            <div style="display:flex;gap:4px;margin-bottom:5px">
+                <button id="btn-mode-field"   onclick="setOptMode('field')"   style="flex:1;font-size:11px;padding:2px 4px;background:#1a3520;color:#4fa;border:1px solid #2a5530;border-radius:4px;cursor:pointer">↓ Dampen</button>
+                <button id="btn-mode-scatter" onclick="setOptMode('scatter')" style="flex:1;font-size:11px;padding:2px 4px;background:#1a2a45;color:#aab;border:1px solid #2a3a5a;border-radius:4px;cursor:pointer">↓ Cloak</button>
+            </div>
+            <div id="opt-btns">
+                <button id="btn-optimise">⚡ Optimise</button>
+                <button id="btn-stop-opt">⏹</button>
+            </div>
+            <div id="opt-status"></div>
+            <div id="opt-best"></div>
+        </div>
+
+        <!-- Obstacle list -->
+        <div id="shape-list">
+            <h3>Obstacles</h3>
+            <div id="shape-rows"></div>
+            <div id="shape-add-row">
+                <select id="sel-new-shape">
+                    <option value="ellipse"  >Ellipse</option>
+                    <option value="circle"   >Circle</option>
+                    <option value="joukowski">Joukowski</option>
+                    <option value="submarine">Submarine</option>
+                    <option value="rect"     >Rectangle</option>
+                </select>
+                <button id="btn-add-shape">+</button>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<div id="status">
+    <span>Frame <span class="hi" id="st-frame">—</span></span>
+    <span>Solve <span class="hi" id="st-solve">—</span> ms</span>
+    <span>k=<span class="hi" id="st-k">—</span></span>
+    <span>λ=<span class="hi" id="st-lam">—</span></span>
+    <span>α=<span class="hi" id="st-alpha">—</span></span>
+    <span>Panels <span class="hi" id="st-panels">—</span> / rec <span id="st-rec">—</span></span>
+    <span class="dim" id="st-solver">scipy</span>
+</div>
+
+<script>
+"use strict";
+const NX=256, NY=256, DOMAIN=6.0;
+const FIELD_BYTES=NX*NY*4, MASK_BYTES=NX*NY;
+const SHAPE_COLORS=["#4af","#fa4","#f4a","#4fa","#a4f","#ff4","#4ff","#f4f"];
+
+const canvas = document.getElementById("field-canvas");
+const ctx    = canvas.getContext("2d");
+const spkCtx = document.getElementById("sparkline-canvas").getContext("2d");
+
+let ws=null, lastFrame=null, displayMode="re";
+let useGpu=true, useFortran=false, hasFortran=false;
+let sweepK=false, sweepAlpha=false;
+let shapes=[], selectedId=null, dragging=false;
+let optimising=false;
+
+// Power history for sparkline (last 80 samples)
+const SPARK_LEN = 80;
+const powerHistory = [];
+
+// ── Colormaps ─────────────────────────────────────────────────────────────────
+function cmapDiverging(t) {
+    t=Math.max(0,Math.min(1,t));
+    if(t<0.5){const s=t*2; return[Math.round(20+s*235),Math.round(60+s*195),Math.round(200+s*55)];}
+    const s=(t-0.5)*2; return[255,Math.round(255-s*215),Math.round(255-s*235)];
+}
+function cmapPlasma(t) {
+    const stops=[[13,8,135],[84,2,163],[139,10,165],[185,50,137],[219,92,104],[244,136,73],[254,188,43],[240,249,33]];
+    t=Math.max(0,Math.min(1,t));
+    const i=Math.min(Math.floor(t*(stops.length-1)),stops.length-2), f=t*(stops.length-1)-i;
+    const [a,b]=[stops[i],stops[i+1]];
+    return[Math.round(a[0]+f*(b[0]-a[0])),Math.round(a[1]+f*(b[1]-a[1])),Math.round(a[2]+f*(b[2]-a[2]))];
+}
+function hsl(h,s,l){
+    s/=100;l/=100; const k=n=>(n+h/30)%12,a=s*Math.min(l,1-l),f=n=>l-a*Math.max(Math.min(k(n)-3,9-k(n),1),-1);
+    return[Math.round(f(0)*255),Math.round(f(8)*255),Math.round(f(4)*255)];
+}
+function cmapPhase(t){return hsl(Math.max(0,Math.min(1,t))*360,75,55);}
+
+// ── Power gauge ───────────────────────────────────────────────────────────────
+function powerColor(p) {
+    if(p < 0.05)  return "#2ecc71";   // green  — near cloak
+    if(p < 0.20)  return "#a8d86e";   // yellow-green
+    if(p < 0.50)  return "#f1c40f";   // yellow
+    if(p < 1.00)  return "#e67e22";   // orange
+    return "#e74c3c";                  // red — strong scatter
+}
+function powerLabel(p) {
+    if(p < 0.05) return "CLOAK";
+    if(p < 0.15) return "LOW";
+    if(p < 0.5)  return "MED";
+    if(p < 1.0)  return "HIGH";
+    return "LOUD";
+}
+
+function updatePowerGauge(fp, sp, fieldMode) {
+    // Primary: field power (what the user sees on screen = |p_total|²)
+    const el  = document.getElementById("power-number");
+    const bar = document.getElementById("power-bar");
+    const col = powerColor(fp);
+
+    el.textContent = fp.toFixed(3);
+    el.style.color = col;
+
+    const pct = Math.min(100, fp * 80);
+    bar.style.width      = pct + "%";
+    bar.style.background = col;
+
+    // Secondary label
+    document.getElementById("power-scatter-lbl").textContent =
+        "scatter: " + sp.toFixed(3);
+
+    // Sparkline tracks whichever metric is being optimised
+    powerHistory.push(fieldMode ? fp : sp);
+    if(powerHistory.length > SPARK_LEN) powerHistory.shift();
+    drawSparkline();
+}
+
+function drawSparkline() {
+    const c = document.getElementById("sparkline-canvas");
+    const W = c.width, H = c.height;
+    spkCtx.clearRect(0,0,W,H);
+    if(powerHistory.length < 2) return;
+
+    const mx = Math.max(...powerHistory, 0.1);
+    const toY = v => H - 2 - (v/mx)*(H-4);
+    const toX = i => i/(SPARK_LEN-1)*W;
+
+    // Fill
+    spkCtx.beginPath();
+    spkCtx.moveTo(toX(0), H);
+    powerHistory.forEach((v,i)=>spkCtx.lineTo(toX(i*(SPARK_LEN/powerHistory.length)), toY(v)));
+    spkCtx.lineTo(W, H);
+    spkCtx.closePath();
+    spkCtx.fillStyle="rgba(74,159,255,0.12)";
+    spkCtx.fill();
+
+    // Line, coloured by value
+    for(let i=1;i<powerHistory.length;i++){
+        const x0=toX((i-1)*(SPARK_LEN/powerHistory.length));
+        const x1=toX(i*(SPARK_LEN/powerHistory.length));
+        const y0=toY(powerHistory[i-1]), y1=toY(powerHistory[i]);
+        spkCtx.strokeStyle=powerColor(powerHistory[i]);
+        spkCtx.lineWidth=1.5;
+        spkCtx.beginPath(); spkCtx.moveTo(x0,y0); spkCtx.lineTo(x1,y1); spkCtx.stroke();
+    }
+
+    // Zero-line at p=0
+    spkCtx.strokeStyle="#1f2a40"; spkCtx.lineWidth=0.5;
+    spkCtx.setLineDash([2,4]);
+    spkCtx.beginPath(); spkCtx.moveTo(0,H-2); spkCtx.lineTo(W,H-2); spkCtx.stroke();
+    spkCtx.setLineDash([]);
+}
+
+// ── Frame parser ──────────────────────────────────────────────────────────────
+function parseFrame(buf) {
+    const v=new DataView(buf); let off=0;
+    const frameNum  = v.getInt32(off,true);   off+=4;
+    const solveMs   = v.getFloat32(off,true); off+=4;
+    const k         = v.getFloat32(off,true); off+=4;
+    const alpha     = v.getFloat32(off,true); off+=4;
+    const nShapes   = v.getInt32(off,true);   off+=4;
+    const nRec      = v.getInt32(off,true);   off+=4;
+    const flags     = v.getInt32(off,true);   off+=4;
+    const fieldPow  = v.getFloat32(off,true); off+=4;
+    const scatPow   = v.getFloat32(off,true); off+=4;
+    const optIter   = v.getInt32(off,true);   off+=4;
+    const optBest   = v.getFloat32(off,true); off+=4;
+    const optMode   = v.getInt32(off,true);   off+=4;  // 1=field, 0=scatter
+
+    const pRe  = new Float32Array(buf,off,NX*NY); off+=FIELD_BYTES;
+    const pIm  = new Float32Array(buf,off,NX*NY); off+=FIELD_BYTES;
+    const mask = new Uint8Array(buf,off,NX*NY);    off+=MASK_BYTES;
+
+    const shapeMeta=[];
+    for(let i=0;i<nShapes;i++){
+        const sid=v.getInt32(off,true); off+=4;
+        const np =v.getInt32(off,true); off+=4;
+        shapeMeta.push({sid,np});
+    }
+    const boundaries=[];
+    for(const{sid,np} of shapeMeta){
+        const pts=new Float32Array(buf,off,np*2); off+=np*2*4;
+        boundaries.push({sid,pts});
+    }
+    return{frameNum,solveMs,k,alpha,nShapes,nRec,flags,fieldPow,scatPow,optIter,optBest,optMode,
+           pRe,pIm,mask,boundaries};
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function renderFrame(f) {
+    const{pRe,pIm,mask,boundaries,k,alpha,solveMs,frameNum,nRec,
+          fieldPow,scatPow,optIter,optBest,optMode,flags}=f;
+    const W=canvas.width, H=canvas.height;
+    let field,cmap,vmin,vmax;
+
+    if(displayMode==="re"||displayMode==="im"){
+        field=displayMode==="re"?pRe:pIm;
+        let mx=0; for(let i=0;i<field.length;i++){const a=Math.abs(field[i]);if(a>mx)mx=a;}
+        vmin=-(mx||1); vmax=mx||1; cmap=cmapDiverging;
+    } else if(displayMode==="intensity"){
+        field=new Float32Array(pRe.length);
+        for(let i=0;i<pRe.length;i++) field[i]=pRe[i]*pRe[i]+pIm[i]*pIm[i];
+        vmin=0; vmax=0; for(let i=0;i<field.length;i++) if(field[i]>vmax)vmax=field[i];
+        vmax=vmax||1; cmap=cmapPlasma;
+    } else if(displayMode==="abs"){
+        field=new Float32Array(pRe.length);
+        for(let i=0;i<pRe.length;i++) field[i]=Math.sqrt(pRe[i]*pRe[i]+pIm[i]*pIm[i]);
+        vmin=0; vmax=0; for(let i=0;i<field.length;i++) if(field[i]>vmax)vmax=field[i];
+        vmax=vmax||1; cmap=cmapPlasma;
+    } else {
+        field=new Float32Array(pRe.length);
+        for(let i=0;i<pRe.length;i++) field[i]=(Math.atan2(pIm[i],pRe[i])+Math.PI)/(2*Math.PI);
+        vmin=0; vmax=1; cmap=cmapPhase;
+    }
+
+    const range=vmax-vmin||1;
+    const img=ctx.createImageData(W,H); const d=img.data;
+    for(let row=0;row<H;row++){
+        for(let col=0;col<W;col++){
+            const fi=(NY-1-row)*NX+col, pi=(row*W+col)*4;
+            if(mask[fi]){d[pi]=15;d[pi+1]=15;d[pi+2]=25;d[pi+3]=255;}
+            else{
+                const[r,g,b]=cmap((field[fi]-vmin)/range);
+                d[pi]=r;d[pi+1]=g;d[pi+2]=b;d[pi+3]=255;
+            }
+        }
+    }
+    ctx.putImageData(img,0,0);
+
+    // Incident wave arrow
+    const aLen=26, ax=W*0.07, ay=H*0.07;
+    const dx=Math.cos(alpha), dy=-Math.sin(alpha);
+    ctx.save();
+    ctx.strokeStyle="rgba(255,255,200,0.6)"; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(ax-dx*aLen,ay-dy*aLen); ctx.lineTo(ax+dx*aLen,ay+dy*aLen); ctx.stroke();
+    const hx=ax+dx*aLen,hy=ay+dy*aLen,px2=-dy*5,py2=dx*5;
+    ctx.fillStyle="rgba(255,255,200,0.6)";
+    ctx.beginPath(); ctx.moveTo(hx,hy);
+    ctx.lineTo(hx-dx*9+px2,hy-dy*9+py2); ctx.lineTo(hx-dx*9-px2,hy-dy*9-py2);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+
+    // Obstacle boundaries
+    for(const{sid,pts} of boundaries){
+        const idx=shapes.findIndex(s=>s.id===sid);
+        const col=SHAPE_COLORS[(idx>=0?idx:sid)%SHAPE_COLORS.length];
+        const sel=sid===selectedId;
+        ctx.save();
+        ctx.strokeStyle=sel?col:col+"aa"; ctx.lineWidth=sel?2.5:1.5;
+        if(sel){ctx.shadowColor=col; ctx.shadowBlur=8;}
+        ctx.beginPath();
+        for(let i=0;i<pts.length;i+=2){
+            const cx_=(pts[i]+DOMAIN)/(2*DOMAIN)*W, cy_=(DOMAIN-pts[i+1])/(2*DOMAIN)*H;
+            i===0?ctx.moveTo(cx_,cy_):ctx.lineTo(cx_,cy_);
+        }
+        ctx.closePath(); ctx.stroke();
+        ctx.restore();
+    }
+
+    // Power gauge — show field power (intensity dampening) as primary
+    updatePowerGauge(fieldPow, scatPow, optMode===1);
+
+    // Optimiser status
+    const isOpt = !!(flags & 16);
+    if(isOpt){
+        document.getElementById("opt-status").textContent=`iter ${optIter}`;
+        document.getElementById("opt-best").textContent  =`best ${optBest.toFixed(4)}`;
+        document.getElementById("btn-optimise").classList.add("running");
+        document.getElementById("btn-optimise").textContent="⚡ Running…";
+    } else if(optimising && !isOpt){
+        // Just finished
+        optimising=false;
+        document.getElementById("btn-optimise").classList.remove("running");
+        document.getElementById("btn-optimise").textContent="⚡ Optimise";
+        document.getElementById("opt-status").textContent="Done ✓";
+    }
+
+    // Status bar
+    const lam=(2*Math.PI/k).toFixed(3);
+    document.getElementById("st-frame").textContent=frameNum;
+    document.getElementById("st-solve").textContent=solveMs.toFixed(0);
+    document.getElementById("st-k").textContent=k.toFixed(2);
+    document.getElementById("st-lam").textContent=lam;
+    document.getElementById("st-alpha").textContent=(alpha*180/Math.PI).toFixed(0)+"°";
+    const curN=parseInt(document.getElementById("sl-panels").value);
+    const re=document.getElementById("st-rec");
+    document.getElementById("st-panels").textContent=curN;
+    re.textContent=nRec; re.className=curN>=nRec?"good":"warn";
+
+    // Sync sliders when server is sweeping
+    syncSlider("sl-k",     k,                 "k-val",    v=>v.toFixed(1));
+    syncSlider("sl-alpha", alpha*180/Math.PI,  "alpha-val",v=>v.toFixed(0)+"°");
+    document.getElementById("lambda-lbl").textContent="λ="+lam;
+}
+
+function syncSlider(id,val,lid,fmt){
+    const sl=document.getElementById(id);
+    if(Math.abs(parseFloat(sl.value)-val)>0.25){
+        sl.value=val; document.getElementById(lid).textContent=fmt(val);
+    }
+}
+
+// ── Shape list ────────────────────────────────────────────────────────────────
+const SHAPE_SHORT={ellipse:"Ellipse",circle:"Circle",joukowski:"Joukowski",submarine:"Sub",rect:"Rect"};
+
+function rebuildShapeList(){
+    const c=document.getElementById("shape-rows"); c.innerHTML="";
+    shapes.forEach((sh,idx)=>{
+        const col=SHAPE_COLORS[idx%SHAPE_COLORS.length];
+        const row=document.createElement("div");
+        row.className="shape-row"+(sh.id===selectedId?" selected":"");
+        row.dataset.id=sh.id;
+        const dot=document.createElement("div"); dot.className="shape-dot"; dot.style.background=col;
+        const nm=document.createElement("span"); nm.className="shape-name"; nm.textContent=SHAPE_SHORT[sh.type]||sh.type;
+        const rm=document.createElement("button"); rm.className="shape-remove"; rm.textContent="×";
+        rm.onclick=e=>{e.stopPropagation(); removeShape(sh.id);};
+        row.appendChild(dot); row.appendChild(nm); row.appendChild(rm);
+        row.onclick=()=>{selectedId=sh.id; rebuildShapeList();};
+        c.appendChild(row);
+    });
+}
+
+function addShape(){
+    const type=document.getElementById("sel-new-shape").value;
+    const defaults={ellipse:{a:1.5,b:0.8},circle:{r:1.0},joukowski:{eps:0.12},submarine:{L:2.5,R:0.6},rect:{w:2.0,h:1.2}};
+    const offset=(shapes.length%5)*0.8-1.6;
+    send({add_shape:{type,cx:offset,cy:offset*0.6,params:defaults[type]||{}}});
+}
+
+function removeShape(id){
+    if(shapes.length<=1) return;
+    shapes=shapes.filter(s=>s.id!==id);
+    if(selectedId===id) selectedId=shapes.length?shapes[0].id:null;
+    rebuildShapeList(); send({remove_shape:id});
+}
+
+function syncShapesFromFrame(f){
+    const known=new Set(shapes.map(s=>s.id));
+    for(const{sid} of f.boundaries) if(!known.has(sid)){shapes.push({id:sid,type:"?",cx:0,cy:0,params:{}}); known.add(sid);}
+    const srv=new Set(f.boundaries.map(b=>b.sid));
+    shapes=shapes.filter(s=>srv.has(s.id));
+    rebuildShapeList();
+}
+
+// ── Canvas drag ───────────────────────────────────────────────────────────────
+function canvasToPhys(e){
+    const r=canvas.getBoundingClientRect();
+    return[(e.clientX-r.left)/r.width*(2*DOMAIN)-DOMAIN, DOMAIN-(e.clientY-r.top)/r.height*(2*DOMAIN)];
+}
+function nearestShape(px,py){
+    let best=null, bd=Infinity;
+    for(const sh of shapes){const d=(sh.cx-px)**2+(sh.cy-py)**2; if(d<bd){bd=d;best=sh.id;}}
+    return best;
+}
+
+canvas.addEventListener("mousedown",e=>{
+    const[px,py]=canvasToPhys(e);
+    const id=nearestShape(px,py);
+    if(id!==null){selectedId=id; rebuildShapeList();}
+    dragging=true;
+    if(selectedId!==null){const sh=shapes.find(s=>s.id===selectedId); if(sh){sh.cx=px;sh.cy=py;} send({move_shape:{id:selectedId,cx:px,cy:py}});}
+});
+canvas.addEventListener("mousemove",e=>{
+    if(!dragging||selectedId===null) return;
+    const[px,py]=canvasToPhys(e);
+    const sh=shapes.find(s=>s.id===selectedId); if(sh){sh.cx=px;sh.cy=py;}
+    send({move_shape:{id:selectedId,cx:px,cy:py}});
+});
+canvas.addEventListener("mouseup",  ()=>dragging=false);
+canvas.addEventListener("mouseleave",()=>dragging=false);
+
+canvas.addEventListener("touchstart",e=>{e.preventDefault(); const[px,py]=canvasToPhys(e.touches[0]); const id=nearestShape(px,py); if(id!==null){selectedId=id;rebuildShapeList();} dragging=true; if(selectedId!==null) send({move_shape:{id:selectedId,cx:px,cy:py}});},{passive:false});
+canvas.addEventListener("touchmove", e=>{e.preventDefault(); if(!dragging||selectedId===null) return; const[px,py]=canvasToPhys(e.touches[0]); send({move_shape:{id:selectedId,cx:px,cy:py}});},{passive:false});
+canvas.addEventListener("touchend",  ()=>dragging=false);
+
+// ── WebSocket ─────────────────────────────────────────────────────────────────
+function connect(){
+    const proto=location.protocol==="https:"?"wss:":"ws:";
+    ws=new WebSocket(`${proto}//${location.host}/ws`);
+    ws.binaryType="arraybuffer";
+    ws.onmessage=evt=>{
+        if(typeof evt.data==="string"){
+            const caps=JSON.parse(evt.data);
+            hasFortran=caps.has_fortran||false;
+            const btn=document.getElementById("btn-solver");
+            btn.style.opacity=hasFortran?"1":"0.5";
+            btn.title=hasFortran?"Toggle Fortran LU-IR":"Fortran LU-IR unavailable";
+            if(caps.shapes){
+                shapes=caps.shapes.map(s=>({...s,params:{...s.params}}));
+                if(shapes.length) selectedId=shapes[0].id;
+                rebuildShapeList();
+            }
+            return;
+        }
+        if(evt.data instanceof ArrayBuffer){
+            const f=parseFrame(evt.data);
+            syncShapesFromFrame(f);
+            lastFrame=f; renderFrame(f);
+        }
+    };
+    ws.onclose=()=>setTimeout(connect,1000);
+    ws.onerror=()=>ws.close();
+}
+
+function send(obj){if(ws&&ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify(obj));}
+
+// ── Controls ──────────────────────────────────────────────────────────────────
+document.getElementById("sl-k").oninput=e=>{
+    const k=parseFloat(e.target.value);
+    document.getElementById("k-val").textContent=k.toFixed(1);
+    document.getElementById("lambda-lbl").textContent="λ="+(2*Math.PI/k).toFixed(2);
+    send({k});
+};
+document.getElementById("btn-sweep-k").onclick=e=>{
+    sweepK=!sweepK; e.target.classList.toggle("active",sweepK);
+    e.target.textContent=sweepK?"⏹ k":"▶ k"; send({sweep_k:sweepK});
+};
+document.getElementById("sl-dk").oninput=e=>{
+    const dk=parseFloat(e.target.value)*0.02;
+    document.getElementById("dk-val").textContent=dk.toFixed(2); send({dk});
+};
+document.getElementById("sl-alpha").oninput=e=>{
+    const deg=parseFloat(e.target.value);
+    document.getElementById("alpha-val").textContent=deg.toFixed(0)+"°";
+    send({alpha:deg*Math.PI/180});
+};
+document.getElementById("btn-sweep-alpha").onclick=e=>{
+    sweepAlpha=!sweepAlpha; e.target.classList.toggle("active",sweepAlpha);
+    e.target.textContent=sweepAlpha?"⏹ α":"▶ α"; send({sweep_alpha:sweepAlpha});
+};
+document.getElementById("sl-panels").oninput=e=>{
+    document.getElementById("panels-val").textContent=e.target.value;
+    send({n_panels:parseInt(e.target.value)});
+};
+document.getElementById("sel-display").onchange=e=>{
+    displayMode=e.target.value; if(lastFrame) renderFrame(lastFrame);
+};
+document.getElementById("btn-solver").onclick=e=>{
+    if(!hasFortran) return;
+    useFortran=!useFortran;
+    e.target.textContent=useFortran?"Fortran":"SciPy";
+    e.target.classList.toggle("fon-act",useFortran);
+    document.getElementById("st-solver").textContent=useFortran?"fortran LU-IR":"scipy";
+    send({solver_type:useFortran?"fortran":"scipy"});
+};
+document.getElementById("btn-gpu").onclick=e=>{
+    useGpu=!useGpu; e.target.classList.toggle("active",useGpu);
+    e.target.textContent=useGpu?"GPU: On":"GPU: Off"; send({use_gpu:useGpu});
+};
+let currentOptMode = "field";
+function setOptMode(mode) {
+    currentOptMode = mode;
+    const isField = mode === "field";
+    document.getElementById("btn-mode-field").style.background   = isField ? "#1a4530" : "#1a2a45";
+    document.getElementById("btn-mode-field").style.color        = isField ? "#4fa"    : "#aab";
+    document.getElementById("btn-mode-scatter").style.background = isField ? "#1a2a45" : "#1a2a55";
+    document.getElementById("btn-mode-scatter").style.color      = isField ? "#aab"    : "#a4f";
+    send({opt_mode: mode});
+}
+setOptMode("field");   // initialise styling
+
+document.getElementById("btn-optimise").onclick=()=>{
+    if(optimising) return;
+    optimising=true;
+    document.getElementById("opt-status").textContent="Starting…";
+    document.getElementById("opt-best").textContent="";
+    document.getElementById("btn-optimise").classList.add("running");
+    document.getElementById("btn-optimise").textContent="⚡ Running…";
+    send({start_optimize:true});
+};
+document.getElementById("btn-stop-opt").onclick=()=>{
+    optimising=false;
+    document.getElementById("btn-optimise").classList.remove("running");
+    document.getElementById("btn-optimise").textContent="⚡ Optimise";
+    document.getElementById("opt-status").textContent="Stopped";
+    send({stop_optimize:true});
+};
+document.getElementById("btn-add-shape").onclick=addShape;
+
+// ── Responsive canvas ─────────────────────────────────────────────────────────
+function resizeCanvas(){
+    const w=document.getElementById("canvas-wrap");
+    const sz=Math.min(w.clientWidth-16, w.clientHeight-16, 720);
+    canvas.style.width=sz+"px"; canvas.style.height=sz+"px";
+}
+window.addEventListener("resize",resizeCanvas);
+resizeCanvas();
+
+connect();
+</script>
+</body>
+</html>
