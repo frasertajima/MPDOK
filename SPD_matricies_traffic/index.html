@@ -1,0 +1,775 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>SPD Fleet Tracker — MPDOK</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+    background:#080c14; color:#ccd;
+    font-family:"Segoe UI",system-ui,sans-serif;
+    height:100vh; display:flex; flex-direction:column; overflow:hidden;
+}
+
+/* ── Top bar ── */
+#topbar {
+    display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+    padding:5px 14px; background:#0d1221;
+    border-bottom:1px solid #1a2540; flex-shrink:0;
+}
+#topbar h1 { font-size:13px; font-weight:600; color:#7fb3ff; letter-spacing:0.5px; white-space:nowrap; }
+.sep { width:1px; height:20px; background:#1a2540; }
+#topbar label { font-size:11px; color:#6677aa; white-space:nowrap; }
+#topbar button, #topbar select {
+    background:#13203a; color:#aab; border:1px solid #1e3055;
+    padding:3px 10px; border-radius:4px; font-size:12px; cursor:pointer;
+}
+#topbar button:hover { background:#1a2a4a; }
+#topbar button.active { background:#1a3a6a; border-color:#3a6aaa; color:#7fb3ff; }
+#topbar button.pause-active    { background:#3a1a1a; border-color:#7a2a2a; color:#f88; }
+#topbar button.incident-active { background:#3a0a0a; border-color:#cc2200; color:#ff6644; }
+.val { color:#7fb3ff; font-weight:700; font-family:monospace; }
+
+/* ── Speedup badge ── */
+#speedup-badge {
+    background:linear-gradient(135deg,#0f2a0f,#1a4a1a);
+    border:1px solid #2a6a2a; border-radius:6px;
+    padding:3px 10px; display:flex; align-items:center; gap:6px; font-size:11px;
+}
+#speedup-badge .spd-num { font-size:20px; font-weight:800; font-family:monospace; color:#2ecc71; }
+#speedup-badge .spd-lbl { color:#4a8a4a; font-size:10px; line-height:1.3; }
+
+/* ── Main area ── */
+#main { flex:1; display:flex; overflow:hidden; }
+
+/* ── Single map area ── */
+#map-wrap {
+    flex:1; position:relative; overflow:hidden;
+}
+#leaflet-map {
+    position:absolute; inset:0;
+}
+#field-canvas {
+    position:absolute; inset:0;
+    pointer-events:none; z-index:450;
+}
+/* View label overlay */
+#view-label {
+    position:absolute; top:7px; left:8px; z-index:460; pointer-events:none;
+    font-size:10px; text-transform:uppercase; letter-spacing:1px;
+    color:rgba(180,200,255,0.45); background:rgba(8,12,20,0.55);
+    padding:2px 8px; border-radius:3px;
+}
+
+/* ── Right sidebar ── */
+#sidebar {
+    width:190px; flex-shrink:0; background:#0d1221;
+    border-left:1px solid #1a2540;
+    display:flex; flex-direction:column; padding:10px; gap:10px; overflow-y:auto;
+}
+.stat-block { display:flex; flex-direction:column; gap:4px; }
+.stat-block h4 {
+    font-size:10px; text-transform:uppercase; letter-spacing:1px;
+    color:#2a3a5a; border-bottom:1px solid #1a2540; padding-bottom:3px;
+}
+.stat-row { display:flex; justify-content:space-between; align-items:center; font-size:11px; }
+.stat-row .label { color:#445566; }
+.stat-row .value { font-family:monospace; color:#7fb3ff; font-weight:600; }
+.stat-row .value.good { color:#2ecc71; }
+.stat-row .value.warn { color:#e67e22; }
+.stat-row .value.red  { color:#e74c3c; }
+.stat-row .value.dim  { color:#334455; }
+
+#solve-bar-wrap { background:#0a1020; border-radius:2px; height:5px; margin-top:2px; }
+#solve-bar { height:100%; border-radius:2px; background:#4a9eff; transition:width 0.3s; width:30%; }
+
+#ooc-bar-wrap { background:#0a1020; border-radius:2px; height:4px; margin-top:3px; }
+#ooc-bar { height:100%; border-radius:2px; background:#e67e22; transition:width 0.5s; width:0%; }
+
+.badge { display:inline-block; padding:1px 6px; border-radius:3px; font-size:10px; font-family:monospace; font-weight:700; }
+.badge-ooc { background:#2a1a00; color:#e67e22; border:1px solid #5a3a00; }
+.badge-std { background:#001a2a; color:#4a9eff; border:1px solid #00365a; }
+.badge-oom { background:#2a0000; color:#e74c3c; border:1px solid #5a0000; }
+
+#spark-canvas { width:100%; height:44px; display:block; margin-top:4px; }
+
+.legend { display:flex; flex-direction:column; gap:3px; margin-top:2px; }
+.leg-row { display:flex; align-items:center; gap:6px; font-size:10px; color:#445; }
+.leg-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+
+/* ── Status bar ── */
+#statusbar {
+    display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+    padding:3px 14px; background:#0d1221; border-top:1px solid #1a2540;
+    font-size:10px; font-family:"JetBrains Mono",monospace; flex-shrink:0; color:#2a3a5a;
+}
+#statusbar .hi  { color:#aab; }
+#statusbar .ok  { color:#2ecc71; }
+#statusbar .dim { color:#1e2a3a; }
+
+/* suppress default Leaflet outline on focus */
+.leaflet-container:focus { outline:none; }
+</style>
+</head>
+<body>
+
+<div id="topbar">
+    <h1>⚡ SPD Fleet Tracker</h1>
+    <div id="speedup-badge">
+        <div class="spd-num" id="spd-num">—</div>
+        <div class="spd-lbl">× faster<br>vs SciPy</div>
+    </div>
+    <div class="sep"></div>
+    <label>View:
+        <select id="sel-view">
+            <option value="recon" selected>MPDOK Reconstructed</option>
+            <option value="true">Ground Truth</option>
+            <option value="diff">|Error|</option>
+        </select>
+    </label>
+    <div class="sep"></div>
+    <button id="btn-pause">⏸ Pause</button>
+    <button id="btn-vehicles" class="active">Vehicles: On</button>
+    <button id="btn-fit">⊡ Fit City</button>
+    <button id="btn-incident">⚠ Place Incident</button>
+    <button id="btn-clear-inc" style="display:none">✕ Clear Incidents</button>
+    <div class="sep"></div>
+    <label style="font-size:10px;color:#2a3a5a">MPDOK GMRES-IR · TF32 inner / FP64 outer</label>
+</div>
+
+<div id="main">
+
+    <!-- Single map with split canvas overlay -->
+    <div id="map-wrap">
+        <div id="leaflet-map"></div>
+        <canvas id="field-canvas"></canvas>
+        <div id="view-label">MPDOK Reconstruction</div>
+    </div>
+
+    <!-- Right sidebar -->
+    <div id="sidebar">
+
+        <div class="stat-block">
+            <h4>Assimilation</h4>
+            <div class="stat-row"><span class="label">Solver</span><span class="value" id="v-solver">—</span></div>
+            <div class="stat-row"><span class="label">Build</span><span class="value" id="v-build">—</span></div>
+            <div class="stat-row"><span class="label">MPDOK solve</span><span class="value" id="v-solve">—</span></div>
+            <div class="stat-row"><span class="label">Cycle total</span><span class="value" id="v-total">—</span></div>
+            <div id="solve-bar-wrap"><div id="solve-bar"></div></div>
+            <div class="stat-row" id="row-ooc-iter" style="display:none;margin-top:3px">
+                <span class="label">OOC outer</span><span class="value warn" id="v-ooc-iter">0 / 5</span>
+            </div>
+            <div id="ooc-bar-wrap" style="display:none"><div id="ooc-bar"></div></div>
+            <div class="stat-row" style="margin-top:3px"><span class="label">Last field</span><span class="value dim" id="v-elapsed">—</span></div>
+            <div class="stat-row"><span class="label">Cycle #</span><span class="value dim" id="v-assim-step">—</span></div>
+        </div>
+
+        <div class="stat-block">
+            <h4>Accuracy</h4>
+            <div class="stat-row"><span class="label">vs SciPy</span><span class="value good" id="v-relerr">—</span></div>
+            <div class="stat-row"><span class="label">SciPy</span><span class="value" id="v-scipy">—</span></div>
+            <div class="stat-row" id="row-cupy-oom" style="display:none"><span class="label">CuPy</span><span class="value red"><span class="badge badge-oom">OOM</span></span></div>
+            <div class="stat-row"><span class="label">Field RMSE</span><span class="value" id="v-rmse">—</span></div>
+        </div>
+
+        <div class="stat-block">
+            <h4>Solve time history</h4>
+            <canvas id="spark-canvas" width="160" height="44"></canvas>
+        </div>
+
+        <div class="stat-block">
+            <h4>Simulation</h4>
+            <div class="stat-row"><span class="label">Step</span><span class="value" id="v-step">—</span></div>
+            <div class="stat-row"><span class="label">Vehicles</span><span class="value" id="v-N">—</span></div>
+            <div class="stat-row"><span class="label">Matrix</span><span class="value" id="v-mat">—</span></div>
+            <div class="stat-row"><span class="label">γ</span><span class="value dim">0.20</span></div>
+            <div class="stat-row"><span class="label">λ</span><span class="value dim">0.10</span></div>
+        </div>
+
+        <div class="stat-block">
+            <h4>Colormap</h4>
+            <div class="legend">
+                <div class="leg-row"><div class="leg-dot" style="background:#0d0887"></div>0.0 — Clear</div>
+                <div class="leg-row"><div class="leg-dot" style="background:#7e03a8"></div>0.25</div>
+                <div class="leg-row"><div class="leg-dot" style="background:#cc4778"></div>0.5</div>
+                <div class="leg-row"><div class="leg-dot" style="background:#f89540"></div>0.75</div>
+                <div class="leg-row"><div class="leg-dot" style="background:#f0f921"></div>1.0 — Gridlock</div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<div id="statusbar">
+    <span>Frame <span class="hi" id="st-frame">—</span></span>
+    <span>Build <span class="hi" id="st-build">—</span></span>
+    <span>Solve <span class="hi" id="st-solve">—</span></span>
+    <span>Speedup <span class="ok" id="st-spd">—</span>×</span>
+    <span class="dim" id="st-rel">rel err —</span>
+    <span class="dim" id="st-addr">ws://localhost:8787</span>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script>
+"use strict";
+
+// ── Config ────────────────────────────────────────────────────────────────────
+// Header: 20 × 4 = 80 bytes, little-endian
+//   ii     frame, step
+//   fffff  build_s, solve_s, cycle_s, rel_err, speedup
+//   iiii   N, NX, NY, paused
+//   ffff   city, elapsed_assim, scipy_est_s, scipy_ms
+//   iiii   solver_mode, cupy_oom, outer_iter, assim_step
+
+let NX = 64, NY = 64, N_VEHICLES = 6000, CITY_SIZE = 100.0;
+let OOC_OUTER = 5, SOLVER_MODE = 0;
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let ws          = null;
+let lastData    = null;
+let viewMode    = "recon";
+let showVehicles = true;
+let paused         = false;
+let incidentMode   = false;
+
+const SPARK_LEN    = 80;
+const solveHistory = [];
+
+// ── Geographic bounds for the simulation  (≈100 × 100 km, Greater Vancouver) ──
+// Sim coords: x=0 W→ x=100 E,  y=0 S→ y=100 N
+const SIM_BOUNDS = L.latLngBounds(
+    [48.90, -123.50],   // SW — south of Steveston / Delta
+    [49.80, -122.10]    // NE — east of Maple Ridge
+);
+
+// ── Single Leaflet map ────────────────────────────────────────────────────────
+const TILE = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+const TILE_ATTR = '&copy; <a href="https://openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
+
+const map = L.map("leaflet-map", { zoomControl:false, attributionControl:false })
+              .fitBounds(SIM_BOUNDS);
+L.tileLayer(TILE, { attribution:TILE_ATTR, maxZoom:18, subdomains:"abcd" }).addTo(map);
+L.control.zoom({ position:"bottomleft" }).addTo(map);
+L.control.attribution({ prefix:false, position:"bottomright" }).addAttribution(TILE_ATTR).addTo(map);
+
+map.on("move zoom", redrawCanvases);
+
+// ── Split canvas overlay ──────────────────────────────────────────────────────
+const canvas  = document.getElementById("field-canvas");
+const ctx     = canvas.getContext("2d");
+const spkCtx  = document.getElementById("spark-canvas").getContext("2d");
+
+// Offscreen 64×64 buffer for heatmap pixel data
+const _off    = document.createElement("canvas");
+_off.width = 64; _off.height = 64;
+const _offCtx = _off.getContext("2d");
+
+function resizeCanvases() {
+    const wrap = document.getElementById("map-wrap");
+    canvas.width  = wrap.clientWidth;
+    canvas.height = wrap.clientHeight;
+    map.invalidateSize({ animate:false });
+    if (lastData) redrawCanvases();
+}
+window.addEventListener("resize", resizeCanvases);
+requestAnimationFrame(resizeCanvases);
+
+// ── Plasma colormap ───────────────────────────────────────────────────────────
+const PLASMA_STOPS = [
+    [13,8,135],[84,2,163],[139,10,165],[185,50,137],
+    [219,92,104],[244,136,73],[254,188,43],[240,249,33]
+];
+function plasma(t) {
+    t = Math.max(0, Math.min(1, t));
+    const n = PLASMA_STOPS.length - 1;
+    const i = Math.min(Math.floor(t * n), n - 1);
+    const f = t * n - i;
+    const [a, b] = [PLASMA_STOPS[i], PLASMA_STOPS[i+1]];
+    return [
+        Math.round(a[0] + f*(b[0]-a[0])),
+        Math.round(a[1] + f*(b[1]-a[1])),
+        Math.round(a[2] + f*(b[2]-a[2])),
+    ];
+}
+function hotDiff(t) {
+    t = Math.max(0, Math.min(1, t));
+    if (t < 0.5) { const s = t*2; return [Math.round(s*230), Math.round(s*100), 0]; }
+    const s = (t-0.5)*2;
+    return [230, Math.round(100+s*155), Math.round(s*255)];
+}
+
+// ── Sim → pixel coordinate transform ─────────────────────────────────────────
+// Linear interpolation between the two geographic corners of the sim area.
+function simXform(city) {
+    const swP = map.latLngToContainerPoint(SIM_BOUNDS.getSouthWest());
+    const neP = map.latLngToContainerPoint(SIM_BOUNDS.getNorthEast());
+    return {
+        tx: sx => swP.x + (sx / city) * (neP.x - swP.x),
+        ty: sy => swP.y + (sy / city) * (neP.y - swP.y),
+        swP, neP,
+    };
+}
+
+// ── Heatmap helpers ───────────────────────────────────────────────────────────
+function buildHeatmapImage(fieldData, nx, ny, cmap, alpha) {
+    const idata = _offCtx.createImageData(nx, ny);
+    const d = idata.data;
+    for (let row = 0; row < ny; row++) {
+        for (let col = 0; col < nx; col++) {
+            const fi = (ny-1-row)*nx + col;
+            const pi = (row*nx + col)*4;
+            const [r, g, b] = cmap(fieldData[fi]);
+            d[pi]=r; d[pi+1]=g; d[pi+2]=b; d[pi+3]=alpha;
+        }
+    }
+    return idata;
+}
+
+function buildDiffImage(trueF, reconF, nx, ny, alpha) {
+    let maxErr = 0;
+    for (let i = 0; i < trueF.length; i++) {
+        const e = Math.abs(trueF[i]-reconF[i]);
+        if (e > maxErr) maxErr = e;
+    }
+    maxErr = Math.max(maxErr, 0.01);
+    const idata = _offCtx.createImageData(nx, ny);
+    const d = idata.data;
+    for (let row = 0; row < ny; row++) {
+        for (let col = 0; col < nx; col++) {
+            const fi = (ny-1-row)*nx + col;
+            const pi = (row*nx + col)*4;
+            const t  = Math.abs(trueF[fi]-reconF[fi]) / maxErr;
+            const [r, g, b] = hotDiff(t);
+            d[pi]=r; d[pi+1]=g; d[pi+2]=b; d[pi+3]=alpha;
+        }
+    }
+    return idata;
+}
+
+function stampHeatmap(clipX, clipW, imgData, nx, ny, city) {
+    const { swP, neP } = simXform(city);
+    const dx = neP.x - swP.x, dy = neP.y - swP.y;
+    if (Math.abs(dx) < 2 || Math.abs(dy) < 2) return;
+    _offCtx.putImageData(imgData, 0, 0);
+    ctx.save();
+    ctx.beginPath(); ctx.rect(clipX, 0, clipW, canvas.height); ctx.clip();
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(_off, swP.x, neP.y, dx, -dy);
+    ctx.restore();
+}
+
+// ── Traffic-light colour: green (clear) → yellow → red (gridlock) ────────────
+function congestionColor(c) {
+    c = Math.max(0, Math.min(1, c));
+    let r, g;
+    if (c < 0.5) {
+        r = Math.round(c * 2 * 255);
+        g = 220;
+    } else {
+        r = 255;
+        g = Math.round((1 - (c - 0.5) * 2) * 220);
+    }
+    return `rgb(${r},${g},30)`;
+}
+
+// ── Vehicle dots — coloured by local congestion ───────────────────────────────
+function drawVehicles(posArr, yVals, city) {
+    if (!showVehicles || !posArr || posArr.length === 0) return;
+    const { tx, ty } = simXform(city);
+    const MAX_DOTS = 8000;
+    const nVeh   = posArr.length / 2;
+    const stride = nVeh <= MAX_DOTS ? 1 : Math.ceil(nVeh / MAX_DOTS);
+    const dotR   = 1.2;
+    const hasY   = yVals && yVals.length === nVeh;
+
+    // Group dots by colour bucket (20 buckets) to minimise fillStyle changes
+    const BUCKETS = 20;
+    const groups  = Array.from({length: BUCKETS}, () => []);
+    for (let i = 0; i < nVeh; i += stride) {
+        const c   = hasY ? yVals[i] : 0.3;
+        const bkt = Math.min(BUCKETS - 1, Math.floor(c * BUCKETS));
+        groups[bkt].push(tx(posArr[i*2]), ty(posArr[i*2+1]));
+    }
+    for (let b = 0; b < BUCKETS; b++) {
+        const pts = groups[b];
+        if (pts.length === 0) continue;
+        ctx.fillStyle = congestionColor(b / BUCKETS);
+        ctx.beginPath();
+        for (let j = 0; j < pts.length; j += 2) {
+            ctx.moveTo(pts[j] + dotR, pts[j+1]);
+            ctx.arc(pts[j], pts[j+1], dotR, 0, Math.PI * 2);
+        }
+        ctx.fill();
+    }
+}
+
+// ── Incident markers — pulsing red rings ─────────────────────────────────────
+function drawIncidents(incidentList, city) {
+    if (!incidentList || incidentList.length === 0) return;
+    const { tx, ty } = simXform(city);
+    const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 300);   // 0→1 at ~1.6 Hz
+    incidentList.forEach(inc => {
+        const px = tx(inc.x), py = ty(inc.y);
+        const s  = inc.strength;
+        // Outer pulsing ring
+        const r = 14 + pulse * 8;
+        ctx.beginPath();
+        ctx.arc(px, py, r, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(255,40,0,${0.6 * s * (0.5 + 0.5 * pulse)})`;
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+        // Inner solid circle
+        ctx.beginPath();
+        ctx.arc(px, py, 7, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255,60,0,${0.9 * s})`;
+        ctx.fill();
+        // ⚠ label
+        ctx.fillStyle = `rgba(255,200,180,${s})`;
+        ctx.font = 'bold 11px monospace';
+        ctx.fillText('⚠ incident', px + 10, py + 4);
+    });
+}
+
+// ── Trail colours ─────────────────────────────────────────────────────────────
+const TRAIL_COLORS = ['#ff4455', '#00eeff', '#44ff88', '#ffaa00', '#cc44ff'];
+
+// ── Draw fading vehicle trails ────────────────────────────────────────────────
+function drawTrails(trails, city) {
+    if (!trails || trails.length === 0) return;
+    const { tx, ty } = simXform(city);
+    trails.forEach((trail, i) => {
+        const col = TRAIL_COLORS[i % TRAIL_COLORS.length];
+        const n = trail.length / 2;
+        for (let j = 1; j < n; j++) {
+            ctx.beginPath();
+            ctx.moveTo(tx(trail[(j-1)*2]), ty(trail[(j-1)*2+1]));
+            ctx.lineTo(tx(trail[j*2]),     ty(trail[j*2+1]));
+            ctx.strokeStyle = col;
+            ctx.globalAlpha = 0.06 + 0.80 * (j / n);
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+        }
+        // Large dot with white ring at current position
+        const hx = tx(trail[(n-1)*2]), hy = ty(trail[(n-1)*2+1]);
+        ctx.globalAlpha = 1.0;
+        ctx.beginPath();
+        ctx.arc(hx, hy, 4.5, 0, Math.PI * 2);
+        ctx.fillStyle = col;
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 0.8;
+        ctx.stroke();
+    });
+    ctx.globalAlpha = 1.0;
+}
+
+// ── Redraw canvas ─────────────────────────────────────────────────────────────
+function redrawCanvases() {
+    if (!lastData) return;
+    const { trueF, reconF, posArr, yVals, nx, ny, city, trails, incidentList } = lastData;
+    const W = canvas.width;
+
+    ctx.clearRect(0, 0, W, canvas.height);
+
+    const img = viewMode === "diff"
+        ? buildDiffImage(trueF, reconF, nx, ny, 65)
+        : buildHeatmapImage(viewMode === "true" ? trueF : reconF, nx, ny, plasma, 65);
+    stampHeatmap(0, W, img, nx, ny, city);
+
+    drawVehicles(posArr, yVals, city);
+    drawTrails(trails, city);
+    drawIncidents(incidentList, city);
+}
+
+// ── Sparkline ─────────────────────────────────────────────────────────────────
+function drawSparkline() {
+    const c = document.getElementById("spark-canvas");
+    const W = c.width, H = c.height;
+    spkCtx.clearRect(0, 0, W, H);
+    if (solveHistory.length < 2) return;
+    const mx = Math.max(...solveHistory, 1);
+    const toY = v => H - 2 - (v/mx)*(H-4);
+    const toX = i => i/(SPARK_LEN-1)*W;
+
+    spkCtx.beginPath();
+    spkCtx.moveTo(toX(0), H);
+    solveHistory.forEach((v,i) => spkCtx.lineTo(toX(i*(SPARK_LEN/solveHistory.length)), toY(v)));
+    spkCtx.lineTo(W, H);
+    spkCtx.closePath();
+    spkCtx.fillStyle = "rgba(74,158,255,0.10)";
+    spkCtx.fill();
+
+    spkCtx.beginPath();
+    solveHistory.forEach((v,i) => {
+        const x = toX(i*(SPARK_LEN/solveHistory.length));
+        i === 0 ? spkCtx.moveTo(x, toY(v)) : spkCtx.lineTo(x, toY(v));
+    });
+    spkCtx.strokeStyle = "#3a7adf";
+    spkCtx.lineWidth = 1.5;
+    spkCtx.stroke();
+}
+
+// ── Frame parser ──────────────────────────────────────────────────────────────
+function fmtTime(s) {
+    if (s <= 0)   return "—";
+    if (s < 2)    return (s*1e3).toFixed(s < 0.1 ? 1 : 0) + " ms";
+    if (s < 120)  return s.toFixed(1) + " s";
+    return (s/60).toFixed(1) + " min";
+}
+
+function parseFrame(buf) {
+    const v = new DataView(buf);
+    let off = 0;
+    const frame      = v.getInt32(off,true);   off+=4;
+    const step       = v.getInt32(off,true);   off+=4;
+    const buildS     = v.getFloat32(off,true); off+=4;
+    const solveS     = v.getFloat32(off,true); off+=4;
+    const cycleS     = v.getFloat32(off,true); off+=4;
+    const relErr     = v.getFloat32(off,true); off+=4;
+    const speedup    = v.getFloat32(off,true); off+=4;
+    const N          = v.getInt32(off,true);   off+=4;
+    const nx         = v.getInt32(off,true);   off+=4;
+    const ny         = v.getInt32(off,true);   off+=4;
+    const isPaused   = v.getInt32(off,true);   off+=4;
+    const city       = v.getFloat32(off,true); off+=4;
+    const elapsedAssim = v.getFloat32(off,true); off+=4;
+    const scipyEstS  = v.getFloat32(off,true); off+=4;
+    const scipyMs    = v.getFloat32(off,true); off+=4;
+    const solverMode = v.getInt32(off,true);   off+=4;
+    const cupyOom    = v.getInt32(off,true);   off+=4;
+    const outerIter  = v.getInt32(off,true);   off+=4;
+    const assimStep  = v.getInt32(off,true);   off+=4;
+
+    const nGrid  = nx*ny;
+    const trueF  = new Float32Array(buf, off, nGrid); off += nGrid*4;
+    const reconF = new Float32Array(buf, off, nGrid); off += nGrid*4;
+    const posArr = new Float32Array(buf, off, N*2); off += N*2*4;
+    const yVals  = new Float32Array(buf, off, N);   off += N*4;
+
+    // Trail data (optional — absent in old frames)
+    let trails = [], nFeat = 0, tLen = 0;
+    if (off + 8 <= buf.byteLength) {
+        nFeat = v.getInt32(off, true); off += 4;
+        tLen  = v.getInt32(off, true); off += 4;
+        for (let i = 0; i < nFeat; i++) {
+            trails.push(new Float32Array(buf, off, tLen * 2));
+            off += tLen * 2 * 4;
+        }
+    }
+
+    // Incident data
+    let incidentList = [];
+    if (off + 4 <= buf.byteLength) {
+        const nInc = v.getInt32(off, true); off += 4;
+        for (let i = 0; i < nInc; i++) {
+            const ix = v.getFloat32(off,   true);
+            const iy = v.getFloat32(off+4, true);
+            const is = v.getFloat32(off+8, true);
+            incidentList.push({ x: ix, y: iy, strength: is });
+            off += 12;
+        }
+    }
+
+    return { frame, step, buildS, solveS, cycleS, relErr, speedup,
+             N, nx, ny, isPaused, city, elapsedAssim, scipyEstS, scipyMs,
+             solverMode, cupyOom, outerIter, assimStep,
+             trueF, reconF, posArr, yVals, trails, nFeat, tLen, incidentList };
+}
+
+// ── Render frame ──────────────────────────────────────────────────────────────
+function renderFrame(f) {
+    const { frame, step, buildS, solveS, cycleS, relErr, speedup,
+            N, nx, ny, isPaused, city, elapsedAssim, scipyEstS, scipyMs,
+            solverMode, cupyOom, outerIter, assimStep } = f;
+    const isOOC = solverMode === 1;
+
+    redrawCanvases();
+
+    // Solver badge
+    const solverEl = document.getElementById("v-solver");
+    solverEl.innerHTML = isOOC
+        ? '<span class="badge badge-ooc">OOC-RAM</span>'
+        : '<span class="badge badge-std">Standard</span>';
+
+    document.getElementById("v-build").textContent = fmtTime(buildS);
+    document.getElementById("v-solve").textContent = fmtTime(solveS);
+    document.getElementById("v-total").textContent = fmtTime(cycleS);
+
+    // OOC iteration progress
+    const oocRow     = document.getElementById("row-ooc-iter");
+    const oocBarWrap = document.getElementById("ooc-bar-wrap");
+    if (isOOC) {
+        oocRow.style.display     = "flex";
+        oocBarWrap.style.display = "";
+        document.getElementById("v-ooc-iter").textContent = outerIter + " / " + OOC_OUTER;
+        document.getElementById("ooc-bar").style.width =
+            Math.min(100, (outerIter / Math.max(OOC_OUTER,1)) * 100) + "%";
+    } else {
+        oocRow.style.display     = "none";
+        oocBarWrap.style.display = "none";
+    }
+
+    // Elapsed since last assimilation
+    const elEl = document.getElementById("v-elapsed");
+    if (assimStep === 0) {
+        elEl.textContent = "pending…";
+    } else if (elapsedAssim < 2) {
+        elEl.textContent = elapsedAssim.toFixed(1) + " s ago";
+    } else if (elapsedAssim < 120) {
+        elEl.textContent = elapsedAssim.toFixed(0) + " s ago";
+    } else {
+        elEl.textContent = (elapsedAssim/60).toFixed(1) + " min ago";
+    }
+    document.getElementById("v-assim-step").textContent = assimStep;
+
+    document.getElementById("v-relerr").textContent = relErr > 0 ? relErr.toExponential(2) : "—";
+
+    const scipyLabel = scipyMs > 0
+        ? fmtTime(scipyMs/1000)
+        : scipyEstS > 0 ? "~" + fmtTime(scipyEstS) + " est" : "—";
+    document.getElementById("v-scipy").textContent = scipyLabel;
+
+    document.getElementById("row-cupy-oom").style.display = cupyOom ? "flex" : "none";
+
+    document.getElementById("v-step").textContent = step;
+    document.getElementById("v-N").textContent    = N.toLocaleString();
+    const fp32gb = N*N*4/1e9;
+    document.getElementById("v-mat").textContent  =
+        fp32gb < 1 ? (N*N*8/1e6).toFixed(0) + " MB" : fp32gb.toFixed(1) + " GB FP32";
+
+    // RMSE
+    const { trueF, reconF } = f;
+    let rmse = 0;
+    for (let i = 0; i < trueF.length; i++) rmse += (trueF[i]-reconF[i])**2;
+    rmse = Math.sqrt(rmse/trueF.length);
+    const rmseEl = document.getElementById("v-rmse");
+    rmseEl.textContent = rmse.toFixed(4);
+    rmseEl.className   = "value " + (rmse < 0.05 ? "good" : rmse < 0.15 ? "warn" : "red");
+
+    const maxBar = isOOC ? 60 : 1;
+    document.getElementById("solve-bar").style.width =
+        Math.min(100, (cycleS/maxBar)*100) + "%";
+
+    solveHistory.push(cycleS);
+    if (solveHistory.length > SPARK_LEN) solveHistory.shift();
+    drawSparkline();
+
+    document.getElementById("spd-num").textContent = speedup.toFixed(1);
+
+    document.getElementById("st-frame").textContent = frame;
+    document.getElementById("st-build").textContent = fmtTime(buildS);
+    document.getElementById("st-solve").textContent = fmtTime(solveS);
+    document.getElementById("st-spd").textContent   = speedup.toFixed(1);
+    document.getElementById("st-rel").textContent   = relErr > 0 ? "rel err " + relErr.toExponential(2) : "";
+
+    paused = !!isPaused;
+    const pb = document.getElementById("btn-pause");
+    pb.textContent = paused ? "▶ Resume" : "⏸ Pause";
+    pb.className   = paused ? "pause-active" : "";
+}
+
+// ── WebSocket ─────────────────────────────────────────────────────────────────
+function connect() {
+    const proto = location.protocol === "https:" ? "wss:" : "ws:";
+    ws = new WebSocket(`${proto}//${location.host}/ws`);
+    ws.binaryType = "arraybuffer";
+
+    ws.onmessage = evt => {
+        if (typeof evt.data === "string") {
+            const caps = JSON.parse(evt.data);
+            NX         = caps.nx          || 64;
+            NY         = caps.ny          || 64;
+            N_VEHICLES = caps.N           || 6000;
+            CITY_SIZE  = caps.city_size   || 100.0;
+            OOC_OUTER  = caps.ooc_outer   || 5;
+            SOLVER_MODE = caps.solver_mode || 0;
+            return;
+        }
+        if (evt.data instanceof ArrayBuffer) {
+            lastData = parseFrame(evt.data);
+            renderFrame(lastData);
+        }
+    };
+    ws.onclose = () => setTimeout(connect, 1500);
+    ws.onerror = () => ws.close();
+}
+
+function send(obj) {
+    if (ws && ws.readyState === WebSocket.OPEN)
+        ws.send(JSON.stringify(obj));
+}
+
+// ── Controls ──────────────────────────────────────────────────────────────────
+document.getElementById("btn-pause").onclick = () => {
+    paused = !paused;
+    send({ paused });
+};
+
+document.getElementById("btn-vehicles").onclick = e => {
+    showVehicles = !showVehicles;
+    e.target.textContent = showVehicles ? "Vehicles: On" : "Vehicles: Off";
+    e.target.classList.toggle("active", showVehicles);
+    if (lastData) redrawCanvases();
+};
+
+document.getElementById("sel-view").onchange = e => {
+    viewMode = e.target.value;
+    const labels = { recon:"MPDOK Reconstruction", true:"Ground Truth", diff:"|Reconstruction Error|" };
+    document.getElementById("view-label").textContent = labels[viewMode] || viewMode;
+    if (lastData) redrawCanvases();
+};
+
+document.getElementById("btn-fit").onclick = () => {
+    map.fitBounds(SIM_BOUNDS);
+};
+
+document.getElementById("btn-incident").onclick = e => {
+    incidentMode = !incidentMode;
+    e.target.classList.toggle("incident-active", incidentMode);
+    e.target.textContent = incidentMode ? "⚠ Click map to place" : "⚠ Place Incident";
+    canvas.style.cursor  = incidentMode ? "crosshair" : "";
+};
+
+document.getElementById("btn-clear-inc").onclick = () => {
+    send({ clear_incidents: true });
+    document.getElementById("btn-clear-inc").style.display = "none";
+};
+
+// ── Map click — incident placement or vehicle tracking ────────────────────────
+// Uses Leaflet's click event so it fires through the pointer-events:none canvas.
+map.on("click", e => {
+    if (!lastData) return;
+    // e.containerPoint is pixels relative to the map container — same space as simXform
+    const cx = e.containerPoint.x;
+    const cy = e.containerPoint.y;
+    const { swP, neP } = simXform(lastData.city);
+    const sx = (cx - swP.x) / (neP.x - swP.x) * lastData.city;
+    const sy = (cy - swP.y) / (neP.y - swP.y) * lastData.city;
+
+    if (incidentMode) {
+        send({ incident: { sx, sy } });
+        document.getElementById("btn-clear-inc").style.display = "";
+        incidentMode = false;
+        const btn = document.getElementById("btn-incident");
+        btn.classList.remove("incident-active");
+        btn.textContent = "⚠ Place Incident";
+        return;
+    }
+
+    // Track nearest vehicle
+    const { posArr } = lastData;
+    let bestIdx = -1, bestDist = Infinity;
+    for (let i = 0; i < posArr.length; i += 2) {
+        const dx = posArr[i] - sx, dy = posArr[i+1] - sy;
+        const d = dx*dx + dy*dy;
+        if (d < bestDist) { bestDist = d; bestIdx = i >> 1; }
+    }
+    if (bestIdx >= 0) send({ track: bestIdx });
+});
+
+connect();
+</script>
+</body>
+</html>
