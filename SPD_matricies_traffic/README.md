@@ -6,7 +6,7 @@ engine (TF32 tensor cores + FP64 outer corrections) that handles problem sizes n
 mainstream solver can touch on consumer hardware.
 
 ```
-cd MPDOK/SPD_matrices_vehicle_tracking
+cd MPDOK/SPD_matrices_traffic
 python server.py          # edit N_VEHICLES at the top first
 open http://localhost:8787/
 ```
