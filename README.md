@@ -6,6 +6,8 @@
 **Question posed**: Can the tensor core engine accelerate iterative solvers in a way that creates value for users who are not GPU experts?
 
 ---
+May 24: added academic notebook and NotebookLM powered explanations, with video: https://youtu.be/OFuq1uzfLJM?si=zIOMLfz-evhqBtAE
+
 May 16: added main memory and SSD streaming versions to handle arrays larger than GPU RAM
 
 Bottom line: faster than SciPy but with more precision, not less:
