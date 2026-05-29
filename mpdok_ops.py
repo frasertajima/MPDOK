@@ -100,9 +100,10 @@ class LUIRSolver:
 
     def _setup_signatures(self):
         self._lib.py_lu_ir.argtypes = [
-            ctypes.c_void_p,                   # A  — FP64 device ptr (N×N, Fortran order)
-            ctypes.c_void_p,                   # b  — FP64 device ptr (N,)
-            ctypes.c_void_p,                   # x  — FP64 device ptr (N,), output
+            ctypes.c_void_p,                   # A        — FP64 device ptr (N×N, F-order)
+            ctypes.c_void_p,                   # LU_fp32  — FP32 device ptr (N×N) Python-owned
+            ctypes.c_void_p,                   # b        — FP64 device ptr (N,)
+            ctypes.c_void_p,                   # x        — FP64 device ptr (N,), output
             ctypes.c_int,                      # N
             ctypes.c_double,                   # tol
             ctypes.c_int,                      # maxiter_outer
@@ -120,7 +121,9 @@ class LUIRSolver:
         self._lib.py_lu_free_managed.restype = None
 
         self._lib.py_lu_factor.argtypes = [
-            ctypes.c_void_p,                   # A  — FP64 device ptr (N×N)
+            ctypes.c_void_p,                   # A        — FP64 device ptr (N×N)
+            ctypes.c_void_p,                   # LU_fp32  — FP32 device ptr (N×N) Python-owned
+            ctypes.c_void_p,                   # ipiv     — int32 device ptr (N)   Python-owned
             ctypes.c_int,                      # N
             ctypes.POINTER(ctypes.c_int),      # info_out (0 = ok)
         ]
@@ -183,17 +186,25 @@ class LUIRSolver:
         Call once when A is fixed; then call solve_factored(b) for each
         right-hand side.  O(N^3) cost paid here; subsequent solves are O(N^2).
 
+        LU factors and pivot indices are allocated in CuPy (proper cudaMalloc)
+        so that free_factored() can release VRAM via Python GC — no NVHPC leak.
+
         Args:
             A: (N, N) FP64 NumPy, CuPy, or _ManagedArray.
         """
         A_arr = A.array if isinstance(A, _ManagedArray) else A
         A_gpu = cp.asfortranarray(cp.asarray(A_arr, dtype=cp.float64))
         N = int(A_gpu.shape[0])
-        self._factored_A = A_gpu   # keep reference for Dgemv in refinement
+        self._factored_A = A_gpu          # keep FP64 reference for Dgemv
         self._factored_N = N
+        # Allocate FP32 LU + int32 pivot in CuPy — cudaMalloc, not Fortran alloc
+        self._lu_buf   = cp.empty((N, N), dtype=cp.float32, order='F')
+        self._ipiv_buf = cp.empty(N,      dtype=cp.int32)
         info = ctypes.c_int(0)
         self._lib.py_lu_factor(
             ctypes.c_void_p(A_gpu.data.ptr),
+            ctypes.c_void_p(self._lu_buf.data.ptr),    # Python-owned FP32 buffer
+            ctypes.c_void_p(self._ipiv_buf.data.ptr),  # Python-owned int32 buffer
             ctypes.c_int(N),
             ctypes.byref(info),
         )
@@ -243,11 +254,12 @@ class LUIRSolver:
         return x_gpu
 
     def free_factored(self):
-        """Release saved LU factors and cuBLAS/cuSOLVER handles."""
-        self._lib.py_lu_free_factored()
-        if hasattr(self, '_factored_A'):
-            del self._factored_A
-            del self._factored_N
+        """Release LU VRAM buffers (CuPy cudaFree) and cuBLAS/cuSOLVER handles."""
+        self._lib.py_lu_free_factored()   # clears module-level C pointers + handles
+        # Delete Python-owned CuPy buffers → CuPy calls cudaFree (no NVHPC leak)
+        for attr in ('_lu_buf', '_ipiv_buf', '_factored_A', '_factored_N'):
+            if hasattr(self, attr):
+                delattr(self, attr)
 
     # ----------------------------------------------------------------
     # Solve
@@ -299,8 +311,13 @@ class LUIRSolver:
         x_gpu = cp.zeros(N, dtype=cp.float64)
         converged = ctypes.c_int(0)
 
+        # Allocate FP32 LU buffer in CuPy (cudaMalloc) so Python GC calls cudaFree
+        # when this function returns — eliminates the NVHPC device-alloc VRAM leak.
+        lu_buf = cp.empty((N, N), dtype=cp.float32, order='F')
+
         self._lib.py_lu_ir(
             ctypes.c_void_p(A_gpu.data.ptr),
+            ctypes.c_void_p(lu_buf.data.ptr),   # Python-owned FP32 LU buffer
             ctypes.c_void_p(b_gpu.data.ptr),
             ctypes.c_void_p(x_gpu.data.ptr),
             ctypes.c_int(N),
@@ -309,6 +326,7 @@ class LUIRSolver:
             ctypes.byref(converged),
         )
         cp.cuda.Stream.null.synchronize()
+        del lu_buf   # CuPy calls cudaFree immediately — no leak
 
         if not converged.value:
             warnings.warn(
