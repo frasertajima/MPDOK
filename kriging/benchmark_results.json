@@ -1,0 +1,176 @@
+[
+  {
+    "N": 1000,
+    "backend": "scipy",
+    "model": "matern32",
+    "success": true,
+    "fit_time": 0.126595631998498,
+    "ooc": false
+  },
+  {
+    "N": 2000,
+    "backend": "scipy",
+    "model": "matern32",
+    "success": true,
+    "fit_time": 0.2782831649965374,
+    "ooc": false
+  },
+  {
+    "N": 5000,
+    "backend": "scipy",
+    "model": "matern32",
+    "success": true,
+    "fit_time": 1.376392673002556,
+    "ooc": false
+  },
+  {
+    "N": 10000,
+    "backend": "scipy",
+    "model": "matern32",
+    "success": true,
+    "fit_time": 6.751387588999933,
+    "ooc": false
+  },
+  {
+    "N": 15000,
+    "backend": "scipy",
+    "model": "matern32",
+    "success": true,
+    "fit_time": 16.969993935003004,
+    "ooc": false
+  },
+  {
+    "N": 20000,
+    "backend": "scipy",
+    "model": "matern32",
+    "success": true,
+    "fit_time": 31.84930681100377,
+    "ooc": false
+  },
+  {
+    "N": 1000,
+    "backend": "cupy",
+    "model": "matern32",
+    "success": true,
+    "fit_time": 0.15440888200100744,
+    "ooc": false
+  },
+  {
+    "N": 2000,
+    "backend": "cupy",
+    "model": "matern32",
+    "success": true,
+    "fit_time": 0.010867009004869033,
+    "ooc": false
+  },
+  {
+    "N": 5000,
+    "backend": "cupy",
+    "model": "matern32",
+    "success": true,
+    "fit_time": 0.032654117996571586,
+    "ooc": false
+  },
+  {
+    "N": 10000,
+    "backend": "cupy",
+    "model": "matern32",
+    "success": true,
+    "fit_time": 1.6236238260025857,
+    "ooc": false
+  },
+  {
+    "N": 20000,
+    "backend": "cupy",
+    "model": "matern32",
+    "success": true,
+    "fit_time": 24.32971145999909,
+    "ooc": false
+  },
+  {
+    "N": 22000,
+    "backend": "cupy",
+    "model": "matern32",
+    "success": false,
+    "error": "MemoryError: Out of memory allocating 3,872,000,000 bytes (allocated so far: 3,872,704,512 bytes)."
+  },
+  {
+    "N": 24000,
+    "backend": "cupy",
+    "model": "matern32",
+    "success": false,
+    "error": "MemoryError: Out of memory allocating 4,608,000,000 bytes (allocated so far: 4,608,768,000 bytes)."
+  },
+  {
+    "N": 1000,
+    "backend": "mpdok",
+    "model": "matern32",
+    "success": true,
+    "fit_time": 0.11318677700182889,
+    "ooc": false
+  },
+  {
+    "N": 2000,
+    "backend": "mpdok",
+    "model": "matern32",
+    "success": true,
+    "fit_time": 0.07129767700098455,
+    "ooc": false
+  },
+  {
+    "N": 5000,
+    "backend": "mpdok",
+    "model": "matern32",
+    "success": true,
+    "fit_time": 0.2698836100025801,
+    "ooc": false
+  },
+  {
+    "N": 10000,
+    "backend": "mpdok",
+    "model": "matern32",
+    "success": true,
+    "fit_time": 0.9593235789943719,
+    "ooc": false
+  },
+  {
+    "N": 15000,
+    "backend": "mpdok",
+    "model": "matern32",
+    "success": true,
+    "fit_time": 2.1388404669996817,
+    "ooc": false
+  },
+  {
+    "N": 20000,
+    "backend": "mpdok",
+    "model": "matern32",
+    "success": true,
+    "fit_time": 3.784206270996947,
+    "ooc": false
+  },
+  {
+    "N": 22000,
+    "backend": "mpdok",
+    "model": "matern32",
+    "success": true,
+    "fit_time": 4.617324477003422,
+    "ooc": false
+  },
+  {
+    "N": 25000,
+    "backend": "mpdok",
+    "model": "matern32",
+    "success": true,
+    "fit_time": 135.22535467700072,
+    "ooc": true
+  },
+  {
+    "N": 30000,
+    "backend": "mpdok",
+    "model": "matern32",
+    "success": true,
+    "fit_time": 191.96439454199572,
+    "ooc": true
+  }
+]
