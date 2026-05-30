@@ -106,7 +106,7 @@ For large evolution times, accuracy is maintained via **restart**: instead of on
 
 ### Things to look at with our N=20 result:
 
-- **The Ergodicity Time Scale (*t ~erg~*):** Look at the exact time *t* where the chaotic system’s entanglement entropy trajectory hits a flat line. That specific timestamp is a fundamental characteristic of your Hamiltonian. It tells you how long it takes for a local qubit perturbation to fully "scramble" and maximize entanglement across a million states.
+- **The Ergodicity Time Scale (*t <sub>erg</sub>*):** Look at the exact time *t* where the chaotic system’s entanglement entropy trajectory hits a flat line. That specific timestamp is a fundamental characteristic of your Hamiltonian. It tells you how long it takes for a local qubit perturbation to fully "scramble" and maximize entanglement across a million states.
     
 - **The Non-Local Nature of Chaos:** Because you chose an all-to-all random coupling ($J_{ij}$ spin glass), your system is a toy model for **fast scrambling**, a concept heavily studied in quantum gravity (related to black hole information paradoxes). Your results prove that the system acts as a near-perfect information scrambler, which is fundamentally distinct from standard nearest-neighbor models.
 
