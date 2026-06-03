@@ -1,3 +1,5 @@
+<img width="1389" height="495" alt="quantum_MBL" src="https://github.com/user-attachments/assets/af7b67f9-fe65-4f7e-987c-1912919489f3" />
+
 # MBL Finite-Size Scaling: N=20 → N=24 → N=26
 
 ## What We Calculated
