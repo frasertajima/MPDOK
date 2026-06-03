@@ -60,7 +60,12 @@ def run_sweep_trotter(
 
     is_gpu = _CUPY and xp is cp
     if dtype is None:
-        dtype = xp.complex128 if is_gpu else np.complex64
+        # complex128 cuSolver SVD workspace OOMs at N≥26 on 8 GB VRAM; complex64
+        # halves the state vector and workspace while preserving physics accuracy
+        if is_gpu and n_qubits >= 26:
+            dtype = xp.complex64
+        else:
+            dtype = xp.complex128 if is_gpu else np.complex64
 
     diag_dtype = xp.float64 if is_gpu else np.float32
 
@@ -105,15 +110,19 @@ def run_sweep_trotter(
                 print(f'  W={W:.1f}  r={r_idx+1}/{n_realizations}{eta_str}',
                       flush=True)
 
+            # obs_fns: compute observables on-the-fly, never store 40×psi copies
+            obs_fns = {
+                'entropy':   lambda p: entanglement_entropy(p, n_qubits),
+                'imbalance': lambda p: imbalance(p, n_qubits),
+            }
             t0      = time.perf_counter()
             traj    = evolve_trotter(psi0, diag, Gamma, times,
-                                     dt=dt, verbose=False)
+                                     dt=dt, verbose=False, obs_fns=obs_fns)
             elapsed = time.perf_counter() - t0
             eta_step = elapsed
 
-            ent_arr = np.array([entanglement_entropy(r.psi, n_qubits)
-                                 for r in traj])
-            imb_arr = np.array([imbalance(r.psi, n_qubits) for r in traj])
+            ent_arr = np.array([r.obs['entropy']   for r in traj])
+            imb_arr = np.array([r.obs['imbalance'] for r in traj])
 
             ent_sum += ent_arr
             imb_sum += imb_arr
