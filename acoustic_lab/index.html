@@ -22,9 +22,10 @@ body {
     background:#1a2a45; color:#ccd; border:1px solid #2a3a5a;
     padding:3px 8px; border-radius:4px; font-size:12px; cursor:pointer;
 }
-#controls button:hover   { background:#243355; }
-#controls button.active  { background:#c0392b; border-color:#c0392b; color:#fff; }
-#controls button.fon-act { background:#27ae60; border-color:#27ae60; color:#fff; }
+#controls button:hover    { background:#243355; }
+#controls button.active   { background:#c0392b; border-color:#c0392b; color:#fff; }
+#controls button.fon-act  { background:#27ae60; border-color:#27ae60; color:#fff; }
+#controls button.bem-act  { background:#7d3c98; border-color:#9b59b6; color:#e8d5ff; }
 #controls input[type=range] { width:80px; vertical-align:middle; accent-color:#4a9eff; }
 .val { color:#7fb3ff; font-weight:600; font-family:monospace; min-width:3ch; display:inline-block; }
 .sep { width:1px; height:20px; background:#1f2a40; flex-shrink:0; }
@@ -152,7 +153,7 @@ body {
         <span class="val" id="panels-val">200</span>
     </label>
     <div class="sep"></div>
-    <button id="btn-solver">SciPy</button>
+    <button id="btn-solver" title="Cycle solver: SciPy → Fortran LU-IR → GPU-BEM">SciPy</button>
     <button id="btn-gpu" class="active">GPU: On</button>
 </div>
 
@@ -227,10 +228,52 @@ const ctx    = canvas.getContext("2d");
 const spkCtx = document.getElementById("sparkline-canvas").getContext("2d");
 
 let ws=null, lastFrame=null, displayMode="re";
-let useGpu=true, useFortran=false, hasFortran=false;
+let useGpu=true;
+let hasFortran=false, hasGpuBem=false;
 let sweepK=false, sweepAlpha=false;
 let shapes=[], selectedId=null, dragging=false;
 let optimising=false;
+
+// ── Solver cycle ──────────────────────────────────────────────────────────────
+// Modes: scipy → fortran → gpu_bem → scipy (skips unavailable)
+const SOLVER_MODES = [
+    {key:'scipy',   label:'SciPy',   cls:'',        statusLabel:'scipy'},
+    {key:'fortran', label:'Fortran', cls:'fon-act',  statusLabel:'fortran LU-IR'},
+    {key:'gpu_bem', label:'GPU-BEM', cls:'bem-act',  statusLabel:'gpu-bem CUDA+GMRES'},
+];
+let solverIdx = 0;   // current index into SOLVER_MODES
+
+function solverAvailable(mode) {
+    if(mode.key==='fortran') return hasFortran;
+    if(mode.key==='gpu_bem') return hasGpuBem;
+    return true;
+}
+
+function applySolverBtn() {
+    const mode = SOLVER_MODES[solverIdx];
+    const btn  = document.getElementById("btn-solver");
+    btn.textContent = mode.label;
+    btn.className   = mode.cls;
+    document.getElementById("st-solver").textContent = mode.statusLabel;
+    send({solver_type: mode.key});
+}
+
+function cycleSolver() {
+    let next = (solverIdx + 1) % SOLVER_MODES.length;
+    let tries = 0;
+    while(!solverAvailable(SOLVER_MODES[next]) && tries < SOLVER_MODES.length) {
+        next = (next + 1) % SOLVER_MODES.length;
+        tries++;
+    }
+    solverIdx = next;
+    applySolverBtn();
+}
+
+function refreshSolverBtnOpacity() {
+    const btn = document.getElementById("btn-solver");
+    // Dim if current solver is unavailable (shouldn't happen after cycle, but guards edge cases)
+    btn.style.opacity = solverAvailable(SOLVER_MODES[solverIdx]) ? "1" : "0.5";
+}
 
 // Power history for sparkline (last 80 samples)
 const SPARK_LEN = 80;
@@ -560,10 +603,15 @@ function connect(){
     ws.onmessage=evt=>{
         if(typeof evt.data==="string"){
             const caps=JSON.parse(evt.data);
-            hasFortran=caps.has_fortran||false;
-            const btn=document.getElementById("btn-solver");
-            btn.style.opacity=hasFortran?"1":"0.5";
-            btn.title=hasFortran?"Toggle Fortran LU-IR":"Fortran LU-IR unavailable";
+            hasFortran  = caps.has_fortran  || false;
+            hasGpuBem   = caps.has_gpu_bem  || false;
+            refreshSolverBtnOpacity();
+            // Build tooltip listing available solvers
+            const avail = ['SciPy'];
+            if(hasFortran) avail.push('Fortran LU-IR');
+            if(hasGpuBem)  avail.push('GPU-BEM (CUDA+GMRES)');
+            document.getElementById("btn-solver").title =
+                "Cycle solver: " + avail.join(" → ");
             if(caps.shapes){
                 shapes=caps.shapes.map(s=>({...s,params:{...s.params}}));
                 if(shapes.length) selectedId=shapes[0].id;
@@ -614,14 +662,7 @@ document.getElementById("sl-panels").oninput=e=>{
 document.getElementById("sel-display").onchange=e=>{
     displayMode=e.target.value; if(lastFrame) renderFrame(lastFrame);
 };
-document.getElementById("btn-solver").onclick=e=>{
-    if(!hasFortran) return;
-    useFortran=!useFortran;
-    e.target.textContent=useFortran?"Fortran":"SciPy";
-    e.target.classList.toggle("fon-act",useFortran);
-    document.getElementById("st-solver").textContent=useFortran?"fortran LU-IR":"scipy";
-    send({solver_type:useFortran?"fortran":"scipy"});
-};
+document.getElementById("btn-solver").onclick = cycleSolver;
 document.getElementById("btn-gpu").onclick=e=>{
     useGpu=!useGpu; e.target.classList.toggle("active",useGpu);
     e.target.textContent=useGpu?"GPU: On":"GPU: Off"; send({use_gpu:useGpu});

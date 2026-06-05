@@ -7,6 +7,7 @@ Green's function blocks give the exact acoustic coupling between obstacles.
 Solver paths:
   scipy   — scipy.linalg.solve on complex N×N system
   fortran — LUIRSolver: real (2N)×(2N) block system, TF32 LU + FP64 refinement
+  gpu_bem — CUDA Fortran assembly (bem_assembly.so) + CuPy GMRES (from acoustic_scattering_v2)
 """
 
 import sys
@@ -16,9 +17,11 @@ from scipy.linalg import solve as scipy_solve
 from matplotlib.path import Path as MplPath
 
 _ACDIR = Path(__file__).parent.parent / "acoustic_scattering"
+_V2DIR = Path(__file__).parent.parent / "acoustic_scattering_v2"
 _MPDOK = Path(__file__).parent.parent
-sys.path.insert(0, str(_ACDIR))
-sys.path.insert(0, str(_MPDOK))
+for _p in [str(_ACDIR), str(_V2DIR), str(_MPDOK)]:
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 from bem_helmholtz import (
     build_bem_matrix_helmholtz,
@@ -52,6 +55,25 @@ except Exception as _e:
     HAS_FORTRAN = False
     _luir = None
     print(f"[acoustic_solver] Fortran LU-IR: disabled ({_e})")
+
+# ── GPU-BEM (CUDA Fortran assembly + CuPy GMRES from acoustic_scattering_v2) ──
+
+try:
+    from bem_helmholtz_v2 import (
+        build_matrix   as _v2_build,
+        make_rhs       as _v2_make_rhs,
+        solve_gmres    as _v2_solve_gmres,
+        eval_total_field_gpu as _v2_field_gpu,
+        eval_total_field     as _v2_field_cpu,
+    )
+    HAS_GPU_BEM = HAS_GPU   # only useful when CuPy is available
+    if HAS_GPU_BEM:
+        print("[acoustic_solver] GPU-BEM (CUDA+GMRES): enabled")
+    else:
+        print("[acoustic_solver] GPU-BEM: disabled (no GPU)")
+except Exception as _e:
+    HAS_GPU_BEM = False
+    print(f"[acoustic_solver] GPU-BEM: disabled ({_e})")
 
 # ── Evaluation grid ───────────────────────────────────────────────────────────
 
@@ -228,32 +250,52 @@ class AcousticSolver:
 
         nodes, lengths, per_shape, mask_polys = _make_all_panels(shapes, n_panels)
 
-        A = build_bem_matrix_helmholtz(nodes, lengths, k)
         b_complex, _ = make_rhs_helmholtz(nodes, k, alpha)
 
-        # Sanitize: overlapping shapes can produce R=0 off-diagonal → H₀(0)=Inf.
-        # Zero those entries (two coincident panels have no net contribution).
-        if not np.isfinite(A).all():
-            np.nan_to_num(A, nan=0.0, posinf=0.0, neginf=0.0, copy=False)
+        # gpu_bem path builds its own GPU matrix — skip the CPU assembly
+        use_gpu_bem = (solver_type == "gpu_bem" and HAS_GPU_BEM)
+        if not use_gpu_bem:
+            A = build_bem_matrix_helmholtz(nodes, lengths, k)
 
-        # Tikhonov regularization: suppresses blow-up at BEM irregular frequencies
-        # (interior Dirichlet eigenvalues where the single-layer matrix is nearly singular).
-        # eps ~ 1e-4 * diag_scale leaves normal solutions essentially unchanged.
-        diag_scale = float(np.mean(np.abs(np.diag(A))))
-        if not np.isfinite(diag_scale) or diag_scale == 0.0:
-            diag_scale = 0.1
-        A = A + (diag_scale * 1e-4) * np.eye(len(A))
+            # Sanitize: overlapping shapes can produce R=0 off-diagonal → H₀(0)=Inf.
+            if not np.isfinite(A).all():
+                np.nan_to_num(A, nan=0.0, posinf=0.0, neginf=0.0, copy=False)
+
+            # Tikhonov regularization: suppresses blow-up at BEM irregular frequencies.
+            diag_scale = float(np.mean(np.abs(np.diag(A))))
+            if not np.isfinite(diag_scale) or diag_scale == 0.0:
+                diag_scale = 0.1
+            A = A + (diag_scale * 1e-4) * np.eye(len(A))
+        else:
+            A = None   # not used in gpu_bem path
 
         solver_used = solver_type
-        if solver_type == "fortran" and HAS_FORTRAN:
+        if solver_type == "gpu_bem" and HAS_GPU_BEM:
+            # CUDA Fortran assembly + CuPy GMRES — build entirely on GPU
+            N = len(b_complex)
+            A_gpu = _v2_build(nodes, lengths, k, precision='c64')
+            if not cp.all(cp.isfinite(A_gpu)):
+                A_gpu = cp.nan_to_num(A_gpu, nan=0.0, posinf=0.0, neginf=0.0)
+            diag_scale = float(cp.mean(cp.abs(cp.diag(A_gpu))).get())
+            if not np.isfinite(diag_scale) or diag_scale == 0.0:
+                diag_scale = 0.1
+            A_gpu = A_gpu + cp.eye(N, dtype=cp.complex64) * (diag_scale * 1e-4)
+            sigma, _ = _v2_solve_gmres(nodes, lengths, k, b_complex, A_gpu=A_gpu)
+            solver_used = "gpu-bem"
+        elif solver_type == "fortran" and HAS_FORTRAN:
             x_gpu = _luir.solve(to_block_real(A), rhs_to_real(b_complex))
             sigma  = sigma_from_real(cp.asnumpy(x_gpu))
         else:
             if solver_type == "fortran":
                 solver_used = "scipy (fallback)"
+            elif solver_type == "gpu_bem":
+                solver_used = "scipy (fallback)"
             sigma = scipy_solve(A, b_complex)
 
-        eval_fn = eval_total_field_gpu if (use_gpu and HAS_GPU) else eval_total_field
+        if solver_type == "gpu_bem" and HAS_GPU_BEM:
+            eval_fn = _v2_field_gpu if use_gpu else _v2_field_cpu
+        else:
+            eval_fn = eval_total_field_gpu if (use_gpu and HAS_GPU) else eval_total_field
         p_flat  = eval_fn(nodes, lengths, sigma, GRID_PTS, k, alpha)
 
         # Sanitize: blow-up σ from residual irregular-freq issues can propagate to field

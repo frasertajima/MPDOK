@@ -22,7 +22,7 @@ from scipy.optimize import minimize
 
 from acoustic_solver import (
     AcousticSolver, compute_scattered_power,
-    NX, NY, DOMAIN, HAS_FORTRAN,
+    NX, NY, DOMAIN, HAS_FORTRAN, HAS_GPU_BEM,
 )
 
 try:
@@ -306,11 +306,13 @@ def pack_frame() -> bytes:
         bds  = list(state.boundaries)
         sids = list(state.shape_ids)
         flags = (
-            (1 if state.sweep_k     else 0) |
-            (2 if state.sweep_alpha else 0) |
-            (4 if HAS_FORTRAN       else 0) |
-            (8 if (state.solver_type == "fortran" and HAS_FORTRAN) else 0) |
-            (16 if state.optimising else 0)
+            (1  if state.sweep_k     else 0) |
+            (2  if state.sweep_alpha else 0) |
+            (4  if HAS_FORTRAN       else 0) |
+            (8  if (state.solver_type == "fortran" and HAS_FORTRAN) else 0) |
+            (16 if state.optimising  else 0) |
+            (32 if HAS_GPU_BEM       else 0) |
+            (64 if (state.solver_type == "gpu_bem" and HAS_GPU_BEM) else 0)
         )
 
     # Header: 11 × 4 = 44 bytes
@@ -335,6 +337,7 @@ async def ws_endpoint(ws: WebSocket):
 
     with state.lock:
         caps = {"has_fortran": HAS_FORTRAN,
+                "has_gpu_bem": HAS_GPU_BEM,
                 "shapes": list(state.shapes)}
     await ws.send_text(json.dumps(caps))
 
@@ -370,6 +373,7 @@ async def startup():
     print("=" * 60)
     print(f"  Acoustic Scattering Lab")
     print(f"  Fortran LU-IR: {'enabled' if HAS_FORTRAN else 'disabled'}")
+    print(f"  GPU-BEM (CUDA+GMRES): {'enabled' if HAS_GPU_BEM else 'disabled'}")
     print("=" * 60)
     threading.Thread(target=simulation_loop, daemon=True).start()
     print(f"\033[92m  Open: http://localhost:{PORT}/\033[0m")
