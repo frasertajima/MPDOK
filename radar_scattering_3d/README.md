@@ -188,44 +188,38 @@ detects reliably.
 Resolution audit: same 100-group sweep at **N=5,120** (2× linear, 4× area)
 to quantify panel-count convergence.
 
-**Global difference statistics (Stage 5 − Stage 4):**
+**Global difference statistics (Stage 5 − Stage 4, corrected meshes):**
 
 | Metric | Value |
 |---|---|
-| Max \|Δmean RCS\| | 28.5 dB (deep null shift — expected at nulls) |
-| RMS \|Δmean RCS\| | **0.595 dB** |
-| Cells with \|Δ\| > 0.5 dB | 32% |
-| Cells with \|Δ\| > 1.0 dB | 19% |
+| Max \|Δmean RCS\| | 12.0 dB (deep null shift — expected at nulls) |
+| RMS \|Δmean RCS\| | **0.443 dB** |
+| Cells with \|Δ\| > 0.5 dB | 25% |
+| Cells with \|Δ\| > 1.0 dB | 13% |
 | Max \|ΔP(detect)\| | 1.00 (null flips between N=2,560 and N=5,120) |
-| Cells with \|ΔP\| > 0.10 | 5.9% |
+| Cells with \|ΔP\| > 0.10 | 5.3% |
 
-**Per-target resolution sensitivity (smooth):**
+**Per-target resolution sensitivity (smooth, corrected meshes):**
 
 | Target | Max \|Δmean\| | RMS \|Δmean\| | Max \|ΔP\| |
 |---|---|---|---|
 | Sphere | 0.000 dB | 0.000 dB | 0.000 |
 | Cube | 0.715 dB | 0.139 dB | 1.000 |
-| DblCone | 2.611 dB | 1.181 dB | 1.000 |
+| DblCone | 1.043 dB | 0.105 dB | 1.000 |
 | Dihedral | 1.454 dB | 0.105 dB | 1.000 |
-| **Stealth** | **20.1 dB** | **1.864 dB** | **1.000** |
+| **Stealth** | **1.891 dB** | **0.263 dB** | **1.000** |
 
 The sphere is analytically resolution-stable (Mie solution is panel-independent
-once the BEM discretisation converges).  The stealth body is most sensitive, and
-two distinct mechanisms contribute:
-
-1. **Physical null migration:** designed deep nulls shift in angle as panels
-   move; a 28 dB swing at a null is physically real — the null relocated.
-2. **Panel quality:** at N=5,120 the stealth body mesh has a maximum triangle
-   aspect ratio of ~1,007:1 at the nose (18.75% of panels exceed 5:1), and the
-   DblCone has **all** 5,120 panels at a uniform 734:1 aspect ratio (slant
-   1.80 m, chord 0.0025 m at n_phi=2,560).  At k=8, the slant spans 2.3λ —
-   single-point centroid quadrature under-resolves the Green's function phase
-   across the panel.  This is a genuine mesh quality issue for these two targets;
-   the sphere, cube, and dihedral have aspect ratios ≤ 2:1 throughout.
+once the BEM discretisation converges).  The stealth body's residual sensitivity
+is due to physical null migration — designed deep nulls shift in angle as panels
+refine, and a null that relocates by even half a bin width registers as a large
+|Δ| at that observer direction.  This is physically meaningful, not numerical
+noise: the null relocated, not the field amplitude.
 
 The Mie validation's 0.015 dB error applies only to the sphere mesh.  The
 DblCone and stealth body have no analytic validation baseline; their resolution
-sensitivity mixes physical null migration with panel-quality quadrature error.
+sensitivity reflects physical null migration (see the mesh quality audit below
+for the mesh corrections applied before these numbers were produced).
 
 **Signed bias (corrected mesh):** DblCone and Stealth now show N=2,560 slightly
 *underestimates* mean RCS (positive bias: +0.10 and +0.15 dB), opposite to the
@@ -604,8 +598,8 @@ HPC clusters or commercial solvers (FEKO, CST).  The key enablers are:
 | **Formulation** | Scalar Helmholtz BEM (acoustic / scalar-EM); no polarisation tracking |
 | **Mesh quality — Sphere** | Area ratio 1.9×, aspect ratio ≤ 1.9 — excellent |
 | **Mesh quality — Cube/Dihedral** | Area ratio 1.0×, aspect ratio 1.0 — perfect |
-| **Mesh quality — DblCone** | All 5,120 panels at **734:1** aspect ratio (fan apex slivers) |
-| **Mesh quality — Stealth** | 18.75% panels > 5:1; max **1,007:1** at nose; area ratio 79× |
+| **Mesh quality — DblCone** | Structured mesh: body **0.98:1**, apex fans **19.5:1** (was 734:1) |
+| **Mesh quality — Stealth** | Body max **4.5:1**, cap fans **5.1:1**, area ratio **6.7×** (was 1,007:1 / 79×) |
 | Analytic validation available for | Sphere only (scalar Mie); DblCone/stealth unvalidated |
 | Stage 3 Mie validation max error | **0.015 dB** (N=1,280, k=3, sphere only) |
 | Stage 3 COBOL vs Python Welford | **2.7×10⁻¹⁵ dB** — numerical identity |
