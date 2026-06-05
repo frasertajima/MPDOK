@@ -74,8 +74,10 @@ $A\boldsymbol{\sigma} = \mathbf{b}$.
 
 ### BEM matrix elements
 
-$$\operatorname{Re}(A_{ij}) = -\frac{Y_0(k r_{ij})}{4}\,\Delta l_j \qquad
-  \operatorname{Im}(A_{ij}) = +\frac{J_0(k r_{ij})}{4}\,\Delta l_j \qquad (i\ne j)$$
+Off-diagonal ($i \ne j$), writing $A_{ij} = A_{ij}^R + i A_{ij}^I$:
+
+$$A_{ij}^R = -\frac{Y_0(k r_{ij})}{4}\,\Delta l_j \qquad
+  A_{ij}^I = +\frac{J_0(k r_{ij})}{4}\,\Delta l_j$$
 
 Diagonal ($i=j$): analytical constant-panel self-integral
 $A_{ii} = \tfrac{\Delta l}{2\pi}(1-\gamma-\ln\tfrac{k\Delta l}{4}) + i\tfrac{\Delta l}{4}$.
