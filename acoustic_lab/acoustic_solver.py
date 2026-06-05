@@ -14,6 +14,7 @@ import sys
 from pathlib import Path
 import numpy as np
 from scipy.linalg import solve as scipy_solve
+from scipy.special import hankel1 as _hankel1
 from matplotlib.path import Path as MplPath
 
 _ACDIR = Path(__file__).parent.parent / "acoustic_scattering"
@@ -33,6 +34,23 @@ from bem_helmholtz import (
     sigma_from_real,
 )
 from geometry import circle_panels, ellipse_panels, joukowski_panels, submarine_panels
+
+# ── Neumann (sound-hard) kernel from v3 ──────────────────────────────────────
+
+_V3DIR = Path(__file__).parent.parent / "acoustic_scattering_v3"
+if str(_V3DIR) not in sys.path:
+    sys.path.insert(0, str(_V3DIR))
+
+try:
+    from bem_helmholtz_v3 import (
+        build_matrix_neumann   as _v3_build_neumann,
+        make_rhs_neumann       as _v3_make_rhs_neumann,
+        solve_neumann          as _v3_solve_neumann,
+    )
+    HAS_NEUMANN = True
+except Exception as _e:
+    HAS_NEUMANN = False
+    print(f"[acoustic_solver] Neumann kernel: disabled ({_e})")
 
 # ── GPU ───────────────────────────────────────────────────────────────────────
 
@@ -79,6 +97,7 @@ except Exception as _e:
 
 NX, NY = 256, 256
 DOMAIN = 6.0
+N_FF   = 128   # far-field pattern angles (0..2π)
 
 _xs = np.linspace(-DOMAIN, DOMAIN, NX)
 _ys = np.linspace(-DOMAIN, DOMAIN, NY)
@@ -137,19 +156,20 @@ def _rect_polygon(cx, cy, w, h):
 
 
 def _make_all_panels(shapes, n_each):
-    all_nodes, all_lengths, per_shape, mask_polys = [], [], [], []
+    all_nodes, all_normals, all_lengths, per_shape, mask_polys = [], [], [], [], []
     for sh in shapes:
-        nodes, _, lengths = _make_one(sh["type"], n_each, sh["cx"], sh["cy"], sh.get("params", {}))
+        nodes, normals, lengths = _make_one(sh["type"], n_each, sh["cx"], sh["cy"], sh.get("params", {}))
         all_nodes.append(nodes)
+        all_normals.append(normals)
         all_lengths.append(lengths)
         per_shape.append(nodes)
-        # Exact polygon for interior masking (rectangles need corners, not midpoints)
         p = sh.get("params", {})
         if sh["type"] == "rect":
             mask_polys.append(_rect_polygon(sh["cx"], sh["cy"], p.get("w", 2.0), p.get("h", 1.2)))
         else:
             mask_polys.append(nodes)
-    return np.concatenate(all_nodes), np.concatenate(all_lengths), per_shape, mask_polys
+    return (np.concatenate(all_nodes), np.concatenate(all_normals),
+            np.concatenate(all_lengths), per_shape, mask_polys)
 
 
 def _mask_multi(grid_pts, mask_polys, p_flat):
@@ -161,14 +181,20 @@ def _mask_multi(grid_pts, mask_polys, p_flat):
 
 # ── Power metrics ─────────────────────────────────────────────────────────────
 
-def _incident_field(k, alpha):
+def _incident_field(k, alpha, src_type='plane', src_x=-4.0, src_y=0.0):
     """Return (p_inc_re, p_inc_im) both (NY,NX) float32."""
+    if src_type == 'point':
+        r = np.maximum(np.sqrt((_GRID_X - src_x)**2 + (_GRID_Y - src_y)**2), 1e-10)
+        p = (1j / 4.0) * _hankel1(0, k * r)
+        return (p.real.reshape(NY, NX).astype(np.float32),
+                p.imag.reshape(NY, NX).astype(np.float32))
     phase = k * (_GRID_X * np.cos(alpha) + _GRID_Y * np.sin(alpha))
     return (np.cos(phase).reshape(NY, NX).astype(np.float32),
             np.sin(phase).reshape(NY, NX).astype(np.float32))
 
 
-def compute_power_metrics(p_re, p_im, mask, k, alpha):
+def compute_power_metrics(p_re, p_im, mask, k, alpha,
+                          src_type='plane', src_x=-4.0, src_y=0.0):
     """
     Returns (field_power, scattered_power), both normalised by mean |p_inc|².
 
@@ -184,7 +210,7 @@ def compute_power_metrics(p_re, p_im, mask, k, alpha):
         1 = typical strong scatterer
        >1 = resonant amplification
     """
-    p_inc_re, p_inc_im = _incident_field(k, alpha)
+    p_inc_re, p_inc_im = _incident_field(k, alpha, src_type, src_x, src_y)
     ext = mask == 0
     n   = ext.sum()
     if n == 0:
@@ -205,9 +231,22 @@ def compute_power_metrics(p_re, p_im, mask, k, alpha):
     return field, scatter
 
 
+# ── Far-field pattern ─────────────────────────────────────────────────────────
+
+_FF_PHI   = np.linspace(0, 2 * np.pi, N_FF, endpoint=False)
+_FF_RHAT  = np.stack([np.cos(_FF_PHI), np.sin(_FF_PHI)], axis=1).astype(np.float64)
+
+def _compute_far_field(nodes, lengths, sigma, k):
+    """2D far-field bistatic RCS. Returns (N_FF,) float32 [m]."""
+    phase = np.exp(-1j * k * (_FF_RHAT @ nodes.T))       # (N_FF, N) complex
+    f     = (1j / 4.0) * (phase @ (sigma * lengths))     # (N_FF,) complex
+    return ((4.0 / max(k, 1e-6)) * np.abs(f) ** 2).astype(np.float32)
+
+
 # Keep old name for any callers
-def compute_scattered_power(p_re, p_im, mask, k, alpha):
-    _, sp = compute_power_metrics(p_re, p_im, mask, k, alpha)
+def compute_scattered_power(p_re, p_im, mask, k, alpha,
+                            src_type='plane', src_x=-4.0, src_y=0.0):
+    _, sp = compute_power_metrics(p_re, p_im, mask, k, alpha, src_type, src_x, src_y)
     return sp
 
 
@@ -233,7 +272,8 @@ def recommended_n_panels(k, shapes):
 
 class AcousticSolver:
 
-    def solve(self, shapes, n_panels, k, alpha, solver_type="scipy", use_gpu=True):
+    def solve(self, shapes, n_panels, k, alpha, solver_type="scipy", use_gpu=True,
+              bc_type="soft", src_type="plane", src_x=-4.0, src_y=0.0):
         """
         Returns
         -------
@@ -242,61 +282,98 @@ class AcousticSolver:
         per_shape_nodes : list of (N,2) float32 arrays
         n_rec           : int
         solver_used     : str
-        scattered_power : float  (0=cloak, ~1=normal, >1=resonance)
+        field_power     : float
+        scat_power      : float
+        far_field       : (N_FF,) float32
+
+        src_type : "plane" (default) or "point"
+            "point" uses a cylindrical line source H₀(k|x−xₛ|) at (src_x, src_y)
         """
         if not shapes:
-            z = np.zeros((NY, NX), dtype=np.float32)
-            return z, z, z.astype(np.uint8), [], 100, "scipy", 1.0, 1.0
+            z  = np.zeros((NY, NX), dtype=np.float32)
+            ff = np.zeros(N_FF, dtype=np.float32)
+            return z, z, z.astype(np.uint8), [], 100, "scipy", 1.0, 1.0, ff
 
-        nodes, lengths, per_shape, mask_polys = _make_all_panels(shapes, n_panels)
+        nodes, normals, lengths, per_shape, mask_polys = _make_all_panels(shapes, n_panels)
 
-        b_complex, _ = make_rhs_helmholtz(nodes, k, alpha)
+        use_neumann  = (bc_type == "hard" and HAS_NEUMANN)
+        use_pt_src   = (src_type == "point")
 
-        # gpu_bem path builds its own GPU matrix — skip the CPU assembly
-        use_gpu_bem = (solver_type == "gpu_bem" and HAS_GPU_BEM)
-        if not use_gpu_bem:
-            A = build_bem_matrix_helmholtz(nodes, lengths, k)
+        # ── Build RHS ─────────────────────────────────────────────────────────
+        if use_pt_src:
+            diff_s   = nodes - np.array([src_x, src_y])
+            r_s      = np.maximum(np.linalg.norm(diff_s, axis=1), 1e-10)
+            if use_neumann:
+                # ∂p_inc/∂n = -(ik/4) H₁(kr) (x−xₛ)·n / r  →  RHS = −∂p_inc/∂n
+                b_complex = ((1j * k / 4.0)
+                             * _hankel1(1, k * r_s)
+                             * (np.sum(diff_s * normals, axis=1) / r_s))
+            else:
+                b_complex = -(1j / 4.0) * _hankel1(0, k * r_s)
+        else:
+            if use_neumann:
+                b_complex = _v3_make_rhs_neumann(nodes, normals, k, phi_inc=alpha)
+            else:
+                b_complex, _ = make_rhs_helmholtz(nodes, k, alpha)
 
-            # Sanitize: overlapping shapes can produce R=0 off-diagonal → H₀(0)=Inf.
-            if not np.isfinite(A).all():
-                np.nan_to_num(A, nan=0.0, posinf=0.0, neginf=0.0, copy=False)
-
-            # Tikhonov regularization: suppresses blow-up at BEM irregular frequencies.
+        # ── Solve BEM system ──────────────────────────────────────────────────
+        if use_neumann:
+            from scipy.linalg import solve as _scipy_solve
+            A = _v3_build_neumann(nodes, normals, lengths, k)
             diag_scale = float(np.mean(np.abs(np.diag(A))))
             if not np.isfinite(diag_scale) or diag_scale == 0.0:
-                diag_scale = 0.1
-            A = A + (diag_scale * 1e-4) * np.eye(len(A))
+                diag_scale = 0.5
+            A += (diag_scale * 1e-4) * np.eye(len(A))
+            sigma = _scipy_solve(A, b_complex)
+            solver_used = "scipy [hard]"
         else:
-            A = None   # not used in gpu_bem path
+            use_gpu_bem = (solver_type == "gpu_bem" and HAS_GPU_BEM)
+            if not use_gpu_bem:
+                A = build_bem_matrix_helmholtz(nodes, lengths, k)
+                if not np.isfinite(A).all():
+                    np.nan_to_num(A, nan=0.0, posinf=0.0, neginf=0.0, copy=False)
+                diag_scale = float(np.mean(np.abs(np.diag(A))))
+                if not np.isfinite(diag_scale) or diag_scale == 0.0:
+                    diag_scale = 0.1
+                A = A + (diag_scale * 1e-4) * np.eye(len(A))
 
-        solver_used = solver_type
-        if solver_type == "gpu_bem" and HAS_GPU_BEM:
-            # CUDA Fortran assembly + CuPy GMRES — build entirely on GPU
-            N = len(b_complex)
-            A_gpu = _v2_build(nodes, lengths, k, precision='c64')
-            if not cp.all(cp.isfinite(A_gpu)):
-                A_gpu = cp.nan_to_num(A_gpu, nan=0.0, posinf=0.0, neginf=0.0)
-            diag_scale = float(cp.mean(cp.abs(cp.diag(A_gpu))).get())
-            if not np.isfinite(diag_scale) or diag_scale == 0.0:
-                diag_scale = 0.1
-            A_gpu = A_gpu + cp.eye(N, dtype=cp.complex64) * (diag_scale * 1e-4)
-            sigma, _ = _v2_solve_gmres(nodes, lengths, k, b_complex, A_gpu=A_gpu)
-            solver_used = "gpu-bem"
-        elif solver_type == "fortran" and HAS_FORTRAN:
-            x_gpu = _luir.solve(to_block_real(A), rhs_to_real(b_complex))
-            sigma  = sigma_from_real(cp.asnumpy(x_gpu))
-        else:
-            if solver_type == "fortran":
-                solver_used = "scipy (fallback)"
-            elif solver_type == "gpu_bem":
-                solver_used = "scipy (fallback)"
-            sigma = scipy_solve(A, b_complex)
+            solver_used = solver_type
+            if solver_type == "gpu_bem" and HAS_GPU_BEM:
+                N = len(b_complex)
+                A_gpu = _v2_build(nodes, lengths, k, precision='c64')
+                if not cp.all(cp.isfinite(A_gpu)):
+                    A_gpu = cp.nan_to_num(A_gpu, nan=0.0, posinf=0.0, neginf=0.0)
+                diag_scale = float(cp.mean(cp.abs(cp.diag(A_gpu))).get())
+                if not np.isfinite(diag_scale) or diag_scale == 0.0:
+                    diag_scale = 0.1
+                A_gpu = A_gpu + cp.eye(N, dtype=cp.complex64) * (diag_scale * 1e-4)
+                sigma, _ = _v2_solve_gmres(nodes, lengths, k, b_complex, A_gpu=A_gpu)
+                solver_used = "gpu-bem"
+            elif solver_type == "fortran" and HAS_FORTRAN:
+                x_gpu = _luir.solve(to_block_real(A), rhs_to_real(b_complex))
+                sigma  = sigma_from_real(cp.asnumpy(x_gpu))
+            else:
+                if solver_type in ("fortran", "gpu_bem"):
+                    solver_used = "scipy (fallback)"
+                sigma = scipy_solve(A, b_complex)
 
-        if solver_type == "gpu_bem" and HAS_GPU_BEM:
+        # ── Field evaluation: scattered + incident ────────────────────────────
+        # eval_fn always adds a plane-wave p_inc; for point source we swap it out.
+        if not use_neumann and solver_type == "gpu_bem" and HAS_GPU_BEM:
             eval_fn = _v2_field_gpu if use_gpu else _v2_field_cpu
         else:
             eval_fn = eval_total_field_gpu if (use_gpu and HAS_GPU) else eval_total_field
-        p_flat  = eval_fn(nodes, lengths, sigma, GRID_PTS, k, alpha)
+        p_flat = eval_fn(nodes, lengths, sigma, GRID_PTS, k, alpha)
+
+        if use_pt_src:
+            # Replace plane-wave inc with cylindrical source inc
+            d = np.array([np.cos(alpha), np.sin(alpha)])
+            p_inc_plane = np.exp(1j * k * (GRID_PTS @ d))
+            r_grid = np.maximum(
+                np.sqrt((GRID_PTS[:, 0] - src_x)**2 + (GRID_PTS[:, 1] - src_y)**2),
+                1e-10)
+            p_inc_point = (1j / 4.0) * _hankel1(0, k * r_grid)
+            p_flat = p_flat - p_inc_plane + p_inc_point
 
         # Sanitize: blow-up σ from residual irregular-freq issues can propagate to field
         if not np.isfinite(p_flat).all():
@@ -309,8 +386,10 @@ class AcousticSolver:
         p_re = np.nan_to_num(p_grid.real, nan=0.0).astype(np.float32)
         p_im = np.nan_to_num(p_grid.imag, nan=0.0).astype(np.float32)
 
-        field_power, scat_power = compute_power_metrics(p_re, p_im, interior, k, alpha)
+        field_power, scat_power = compute_power_metrics(
+            p_re, p_im, interior, k, alpha, src_type, src_x, src_y)
+        far_field = _compute_far_field(nodes, lengths, sigma, k)
         bpts  = [n.astype(np.float32) for n in per_shape]
         n_rec = recommended_n_panels(k, shapes)
 
-        return p_re, p_im, interior, bpts, n_rec, solver_used, field_power, scat_power
+        return p_re, p_im, interior, bpts, n_rec, solver_used, field_power, scat_power, far_field
