@@ -22,7 +22,7 @@ from scipy.optimize import minimize
 
 from acoustic_solver import (
     AcousticSolver, compute_scattered_power,
-    NX, NY, DOMAIN, HAS_FORTRAN, HAS_GPU_BEM,
+    NX, NY, DOMAIN, HAS_FORTRAN, HAS_GPU_BEM, N_FF,
 )
 
 try:
@@ -58,6 +58,11 @@ class LabState:
         self.solver_type = "scipy"
         self.use_gpu     = True
 
+        self.bc_type     = "soft"   # "soft" = Dirichlet, "hard" = Neumann
+        self.src_type    = "plane"  # "plane" = infinite plane wave, "point" = line source
+        self.src_x       = -4.0    # point source x (m), used when src_type=="point"
+        self.src_y       =  0.0    # point source y (m)
+
         self.sweep_k     = False
         self.sweep_alpha = False
         self.dk          = 0.08
@@ -68,6 +73,7 @@ class LabState:
         self.p_re        = np.zeros((NY, NX), dtype=np.float32)
         self.p_im        = np.zeros((NY, NX), dtype=np.float32)
         self.mask        = np.zeros((NY, NX), dtype=np.uint8)
+        self.far_field   = np.zeros(N_FF, dtype=np.float32)
         self.boundaries  = []
         self.shape_ids   = []
         self.n_rec       = 200
@@ -109,16 +115,20 @@ def simulation_loop():
 
             for key, cast in [("k", float), ("alpha", float),
                                ("n_panels", int), ("use_gpu", bool),
-                               ("solver_type", str), ("dk", float), ("dalpha", float)]:
+                               ("solver_type", str), ("bc_type", str),
+                               ("src_type", str), ("src_x", float), ("src_y", float),
+                               ("dk", float), ("dalpha", float)]:
                 if key in p:
                     val = cast(p.pop(key))
                     if key == "k":        val = max(state.k_min, min(state.k_max, val))
                     if key == "n_panels": val = max(60, min(500, val))
+                    if key in ("src_x", "src_y"): val = max(-5.9, min(5.9, val))
                     setattr(state, key, val)
-                    if key not in ("dk", "dalpha", "use_gpu", "solver_type"):
+                    if key not in ("dk", "dalpha", "use_gpu", "solver_type",
+                                   "bc_type", "src_type"):
                         state.dirty = True
 
-            if "solver_type" in p or "use_gpu" in p:
+            if "solver_type" in p or "use_gpu" in p or "bc_type" in p or "src_type" in p:
                 state.dirty = True
 
             for sw in ("sweep_k", "sweep_alpha"):
@@ -169,6 +179,15 @@ def simulation_loop():
             if "stop_optimize" in p:
                 p.pop("stop_optimize");  state.optimising = False
 
+            if "set_shapes" in p:
+                new_shapes = p.pop("set_shapes")
+                state.shapes = []
+                for sh in new_shapes:
+                    sh["id"] = state.next_id()
+                    sh.setdefault("params", {})
+                    state.shapes.append(sh)
+                state.dirty = True
+
             if state.sweep_k:
                 state.k = state.k_min if state.k + state.dk > state.k_max else state.k + state.dk
                 state.dirty = True
@@ -180,14 +199,19 @@ def simulation_loop():
             k, alpha    = state.k, state.alpha
             n_panels    = state.n_panels
             solver_type = state.solver_type
+            bc_type     = state.bc_type
+            src_type    = state.src_type
+            src_x       = state.src_x
+            src_y       = state.src_y
             use_gpu     = state.use_gpu
             shapes      = [dict(s, params=dict(s["params"])) for s in state.shapes]
 
         if dirty:
             ts = time.perf_counter()
             try:
-                p_re, p_im, mask, bpts, n_rec, su, fp, sp = solver.solve(
-                    shapes, n_panels, k, alpha, solver_type, use_gpu
+                p_re, p_im, mask, bpts, n_rec, su, fp, sp, ff = solver.solve(
+                    shapes, n_panels, k, alpha, solver_type, use_gpu,
+                    bc_type, src_type, src_x, src_y
                 )
                 with state.lock:
                     state.p_re = p_re;  state.p_im = p_im;  state.mask = mask
@@ -197,6 +221,7 @@ def simulation_loop():
                     state.solver_used = su
                     state.field_power = fp
                     state.scat_power  = sp
+                    state.far_field   = ff
                     state.frame_number += 1
                     state.solve_ms    = (time.perf_counter() - ts) * 1000
                     state.dirty       = False
@@ -239,11 +264,16 @@ def _optimise(solver, shapes_snap, opt_mode="field"):
             k, alpha    = state.k, state.alpha
             n_panels    = state.n_panels
             solver_type = state.solver_type
+            bc_type     = state.bc_type
+            src_type    = state.src_type
+            src_x       = state.src_x
+            src_y       = state.src_y
             use_gpu     = state.use_gpu
 
         try:
-            p_re, p_im, mask, bpts, n_rec, su, fp, sp = solver.solve(
-                shapes, n_panels, k, alpha, solver_type, use_gpu
+            p_re, p_im, mask, bpts, n_rec, su, fp, sp, ff = solver.solve(
+                shapes, n_panels, k, alpha, solver_type, use_gpu,
+                bc_type, src_type, src_x, src_y
             )
         except Exception:
             return 1e6
@@ -260,6 +290,7 @@ def _optimise(solver, shapes_snap, opt_mode="field"):
                 state.shape_ids  = [s["id"] for s in shapes]
                 state.field_power = fp
                 state.scat_power  = sp
+                state.far_field   = ff
                 state.frame_number += 1
                 state.solve_ms = 0.0
                 for i, sid in enumerate(shape_ids):
@@ -303,8 +334,11 @@ def pack_frame() -> bytes:
         om   = 1 if state.opt_mode == "field" else 0   # 1=field, 0=scatter
         p_re = state.p_re;           p_im  = state.p_im
         mask = state.mask
+        ff   = state.far_field
         bds  = list(state.boundaries)
         sids = list(state.shape_ids)
+        src_flag = 1 if state.src_type == "point" else 0
+        sx   = state.src_x;         sy    = state.src_y
         flags = (
             (1  if state.sweep_k     else 0) |
             (2  if state.sweep_alpha else 0) |
@@ -315,12 +349,15 @@ def pack_frame() -> bytes:
             (64 if (state.solver_type == "gpu_bem" and HAS_GPU_BEM) else 0)
         )
 
-    # Header: 11 × 4 = 44 bytes
-    # frame solve_ms k alpha n_shapes n_rec flags field_power scat_power opt_iter opt_best opt_mode(i32)
-    header = struct.pack("<i f f f i i i f f i f i",
-                         fn, ms, k, alpha, nsh, nrec, flags, fp, sp, oi, ob, om)
+    # Header: 15 × 4 = 60 bytes
+    # frame solve_ms k alpha n_shapes n_rec flags field_power scat_power
+    # opt_iter opt_best opt_mode(i32) src_flag(i32) src_x(f32) src_y(f32)
+    header = struct.pack("<i f f f i i i f f i f i i f f",
+                         fn, ms, k, alpha, nsh, nrec, flags, fp, sp,
+                         oi, ob, om, src_flag, sx, sy)
 
-    parts = [header, p_re.tobytes(), p_im.tobytes(), mask.tobytes()]
+    # Data: p_re | p_im | mask | far_field(N_FF×f32) | shape_meta | boundary_pts
+    parts = [header, p_re.tobytes(), p_im.tobytes(), mask.tobytes(), ff.tobytes()]
     for sid, bd in zip(sids, bds):
         parts.append(struct.pack("<ii", sid, len(bd)))
     for bd in bds:
@@ -365,7 +402,8 @@ async def ws_endpoint(ws: WebSocket):
 
 @app.get("/")
 async def root():
-    return FileResponse(WEB_DIR / "index.html")
+    return FileResponse(WEB_DIR / "index.html",
+                        headers={"Cache-Control": "no-store"})
 
 
 @app.on_event("startup")

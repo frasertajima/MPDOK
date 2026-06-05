@@ -26,6 +26,8 @@ body {
 #controls button.active   { background:#c0392b; border-color:#c0392b; color:#fff; }
 #controls button.fon-act  { background:#27ae60; border-color:#27ae60; color:#fff; }
 #controls button.bem-act  { background:#7d3c98; border-color:#9b59b6; color:#e8d5ff; }
+#controls button.hard-act { background:#c0612b; border-color:#e07030; color:#ffe8d0; }
+#controls button.pt-act   { background:#7a6000; border-color:#c8a800; color:#fff8cc; }
 #controls input[type=range] { width:80px; vertical-align:middle; accent-color:#4a9eff; }
 .val { color:#7fb3ff; font-weight:600; font-family:monospace; min-width:3ch; display:inline-block; }
 .sep { width:1px; height:20px; background:#1f2a40; flex-shrink:0; }
@@ -47,27 +49,67 @@ body {
 
 /* Power panel */
 #power-panel {
-    padding:10px 10px 8px;
+    padding:8px 10px 6px;
     border-bottom:1px solid #1f2a40;
     flex-shrink:0;
 }
-#power-panel h3 { font-size:10px; text-transform:uppercase; letter-spacing:1px; color:#445; margin-bottom:6px; }
+#power-panel h3 { font-size:10px; text-transform:uppercase; letter-spacing:1px; color:#445; margin-bottom:5px; }
 #power-number {
-    font-size:28px; font-weight:700; font-family:monospace;
-    text-align:center; letter-spacing:-1px; margin-bottom:5px;
+    font-size:26px; font-weight:700; font-family:monospace;
+    text-align:center; letter-spacing:-1px; margin-bottom:4px;
     transition: color 0.3s;
 }
-#power-bar-wrap { background:#1a2040; border-radius:3px; height:6px; margin-bottom:6px; overflow:hidden; }
+#power-bar-wrap { background:#1a2040; border-radius:3px; height:5px; margin-bottom:4px; overflow:hidden; }
 #power-bar { height:100%; border-radius:3px; width:50%; transition:width 0.2s, background 0.2s; }
-#sparkline-canvas { width:100%; height:48px; display:block; }
+#power-scatter-lbl { font-size:10px;color:#446;text-align:right;font-family:monospace;margin-bottom:3px; }
+#sparkline-canvas { width:100%; height:38px; display:block; }
+
+/* Resolution safety rail */
+#ppw-warn {
+    display:none; padding:4px 8px 3px;
+    background:#1e1200; border-bottom:1px solid #3a2400;
+    font-size:10px; color:#e67e22; font-family:monospace; flex-shrink:0;
+    line-height:1.4;
+}
+#ppw-warn.visible { display:block; }
+
+/* Polar far-field plot */
+#polar-panel {
+    padding:6px 10px 7px;
+    border-bottom:1px solid #1f2a40;
+    flex-shrink:0;
+}
+#polar-panel h3 { font-size:10px; text-transform:uppercase; letter-spacing:1px; color:#445; margin-bottom:4px; display:flex; align-items:center; gap:4px; }
+#polar-panel h3 span { flex:1; }
+#btn-snapshot {
+    background:none; border:1px solid #2a3a5a; border-radius:3px;
+    color:#556; font-size:10px; padding:0 4px; cursor:pointer; line-height:1.5;
+}
+#btn-snapshot:hover   { color:#4a9eff; border-color:#4a9eff; }
+#btn-snapshot.snap-on { color:#e67e22; border-color:#e67e22; }
+#btn-clr-snap {
+    display:none; background:none; border:none; color:#556;
+    font-size:10px; cursor:pointer; padding:0 2px;
+}
+#btn-clr-snap:hover { color:#e74c3c; }
+#polar-wrap { position:relative; }
+#polar-canvas { display:block; margin:0 auto; border-radius:50%; }
+#polar-maxlbl {
+    position:absolute; top:3px; right:0;
+    font-size:9px; font-family:monospace; color:#4a9eff; pointer-events:none;
+}
+#snap-lbl {
+    display:none; position:absolute; bottom:2px; right:0;
+    font-size:9px; font-family:monospace; color:#888; pointer-events:none;
+}
 
 /* Optimiser panel */
 #opt-panel {
-    padding:8px 10px;
+    padding:7px 10px;
     border-bottom:1px solid #1f2a40;
     flex-shrink:0;
 }
-#opt-panel h3 { font-size:10px; text-transform:uppercase; letter-spacing:1px; color:#445; margin-bottom:6px; }
+#opt-panel h3 { font-size:10px; text-transform:uppercase; letter-spacing:1px; color:#445; margin-bottom:5px; }
 #opt-btns { display:flex; gap:5px; margin-bottom:6px; }
 #btn-optimise {
     flex:1; background:#1a3550; color:#4af; border:1px solid #2a5570;
@@ -80,11 +122,11 @@ body {
     border-radius:4px; font-size:12px; padding:4px 8px; cursor:pointer;
 }
 #btn-stop-opt:hover { background:#3a1a1a; }
-#opt-status { font-size:11px; color:#556; font-family:monospace; min-height:16px; }
-#opt-best   { font-size:11px; color:#2ecc71; font-family:monospace; min-height:16px; }
+#opt-status { font-size:11px; color:#556; font-family:monospace; min-height:14px; }
+#opt-best   { font-size:11px; color:#2ecc71; font-family:monospace; min-height:14px; }
 
 /* Shape list */
-#shape-list { flex:1; display:flex; flex-direction:column; padding:8px; gap:5px; overflow-y:auto; }
+#shape-list { flex:1; display:flex; flex-direction:column; padding:8px; gap:4px; overflow-y:auto; }
 #shape-list h3 { font-size:10px; text-transform:uppercase; letter-spacing:1px; color:#445; padding-bottom:4px; border-bottom:1px solid #1f2a40; }
 .shape-row {
     display:flex; align-items:center; gap:6px; padding:4px 5px;
@@ -107,6 +149,16 @@ body {
     border-radius:4px; font-size:14px; padding:1px 8px; cursor:pointer; font-weight:bold;
 }
 #btn-add-shape:hover { background:#1f4a6a; }
+#preset-row { display:flex; gap:4px; align-items:center; margin-top:3px; }
+#sel-preset {
+    flex:1; background:#1a2440; color:#7a9; border:1px solid #2a3a4a;
+    border-radius:4px; font-size:10px; padding:2px 3px;
+}
+#btn-load-preset {
+    background:#1a3520; color:#4a9; border:1px solid #2a5530;
+    border-radius:4px; font-size:11px; padding:2px 6px; cursor:pointer; white-space:nowrap;
+}
+#btn-load-preset:hover { background:#1f4025; }
 
 /* Status bar */
 #status {
@@ -154,6 +206,8 @@ body {
     </label>
     <div class="sep"></div>
     <button id="btn-solver" title="Cycle solver: SciPy → Fortran LU-IR → GPU-BEM">SciPy</button>
+    <button id="btn-bc" title="Toggle boundary condition: Soft (pressure-release) / Hard (rigid wall)">BC: Soft</button>
+    <button id="btn-src" title="Toggle source: Plane wave (infinite) / Point source (cylindrical line source). Drag yellow ★ to reposition.">Src: Plane</button>
     <button id="btn-gpu" class="active">GPU: On</button>
 </div>
 
@@ -169,8 +223,21 @@ body {
             <h3>Field Intensity  |p|²</h3>
             <div id="power-number">—</div>
             <div id="power-bar-wrap"><div id="power-bar"></div></div>
-            <div id="power-scatter-lbl" style="font-size:10px;color:#446;text-align:right;font-family:monospace;margin-top:2px">scatter: —</div>
-            <canvas id="sparkline-canvas" width="180" height="48"></canvas>
+            <div id="power-scatter-lbl">scatter: —</div>
+            <canvas id="sparkline-canvas" width="180" height="38"></canvas>
+        </div>
+
+        <!-- Resolution warning (hidden until under-resolved) -->
+        <div id="ppw-warn"><span id="ppw-warn-text"></span></div>
+
+        <!-- Far-field polar plot -->
+        <div id="polar-panel">
+            <h3><span>Far-Field Pattern</span><button id="btn-snapshot" title="Snapshot current curve as a reference overlay">📷</button><button id="btn-clr-snap" title="Clear snapshot">✕</button></h3>
+            <div id="polar-wrap">
+                <canvas id="polar-canvas" width="178" height="148"></canvas>
+                <span id="polar-maxlbl">—</span>
+                <span id="snap-lbl">ref —dBm</span>
+            </div>
         </div>
 
         <!-- Optimiser -->
@@ -202,6 +269,15 @@ body {
                 </select>
                 <button id="btn-add-shape">+</button>
             </div>
+            <div id="preset-row">
+                <select id="sel-preset">
+                    <option value="crystal" >4×4 Crystal</option>
+                    <option value="waveguide">Waveguide</option>
+                    <option value="double_slit">Double Slit</option>
+                    <option value="lloyds_mirror">Lloyd's Mirror</option>
+                </select>
+                <button id="btn-load-preset" title="Replace all shapes with preset scene">↓ Load</button>
+            </div>
         </div>
 
     </div>
@@ -221,34 +297,37 @@ body {
 "use strict";
 const NX=256, NY=256, DOMAIN=6.0;
 const FIELD_BYTES=NX*NY*4, MASK_BYTES=NX*NY;
+const N_FF=128, FF_BYTES=N_FF*4;
 const SHAPE_COLORS=["#4af","#fa4","#f4a","#4fa","#a4f","#ff4","#4ff","#f4f"];
 
-const canvas = document.getElementById("field-canvas");
-const ctx    = canvas.getContext("2d");
-const spkCtx = document.getElementById("sparkline-canvas").getContext("2d");
+const canvas   = document.getElementById("field-canvas");
+const ctx      = canvas.getContext("2d");
+const spkCtx   = document.getElementById("sparkline-canvas").getContext("2d");
+const polarCvs = document.getElementById("polar-canvas");
+const polarCtx = polarCvs.getContext("2d");
 
 let ws=null, lastFrame=null, displayMode="re";
-let useGpu=true;
+let useGpu=true, bcHard=false, srcPoint=false;
+let srcX=-4.0, srcY=0.0;
 let hasFortran=false, hasGpuBem=false;
 let sweepK=false, sweepAlpha=false;
-let shapes=[], selectedId=null, dragging=false;
+let shapes=[], selectedId=null, dragging=false, draggingSrc=false;
 let optimising=false;
+let snapshotFF=null;
 
 // ── Solver cycle ──────────────────────────────────────────────────────────────
-// Modes: scipy → fortran → gpu_bem → scipy (skips unavailable)
 const SOLVER_MODES = [
     {key:'scipy',   label:'SciPy',   cls:'',        statusLabel:'scipy'},
     {key:'fortran', label:'Fortran', cls:'fon-act',  statusLabel:'fortran LU-IR'},
     {key:'gpu_bem', label:'GPU-BEM', cls:'bem-act',  statusLabel:'gpu-bem CUDA+GMRES'},
 ];
-let solverIdx = 0;   // current index into SOLVER_MODES
+let solverIdx = 0;
 
 function solverAvailable(mode) {
     if(mode.key==='fortran') return hasFortran;
     if(mode.key==='gpu_bem') return hasGpuBem;
     return true;
 }
-
 function applySolverBtn() {
     const mode = SOLVER_MODES[solverIdx];
     const btn  = document.getElementById("btn-solver");
@@ -257,7 +336,6 @@ function applySolverBtn() {
     document.getElementById("st-solver").textContent = mode.statusLabel;
     send({solver_type: mode.key});
 }
-
 function cycleSolver() {
     let next = (solverIdx + 1) % SOLVER_MODES.length;
     let tries = 0;
@@ -268,14 +346,12 @@ function cycleSolver() {
     solverIdx = next;
     applySolverBtn();
 }
-
 function refreshSolverBtnOpacity() {
-    const btn = document.getElementById("btn-solver");
-    // Dim if current solver is unavailable (shouldn't happen after cycle, but guards edge cases)
-    btn.style.opacity = solverAvailable(SOLVER_MODES[solverIdx]) ? "1" : "0.5";
+    document.getElementById("btn-solver").style.opacity =
+        solverAvailable(SOLVER_MODES[solverIdx]) ? "1" : "0.5";
 }
 
-// Power history for sparkline (last 80 samples)
+// ── Power history ─────────────────────────────────────────────────────────────
 const SPARK_LEN = 80;
 const powerHistory = [];
 
@@ -300,38 +376,21 @@ function cmapPhase(t){return hsl(Math.max(0,Math.min(1,t))*360,75,55);}
 
 // ── Power gauge ───────────────────────────────────────────────────────────────
 function powerColor(p) {
-    if(p < 0.05)  return "#2ecc71";   // green  — near cloak
-    if(p < 0.20)  return "#a8d86e";   // yellow-green
-    if(p < 0.50)  return "#f1c40f";   // yellow
-    if(p < 1.00)  return "#e67e22";   // orange
-    return "#e74c3c";                  // red — strong scatter
+    if(p < 0.05)  return "#2ecc71";
+    if(p < 0.20)  return "#a8d86e";
+    if(p < 0.50)  return "#f1c40f";
+    if(p < 1.00)  return "#e67e22";
+    return "#e74c3c";
 }
-function powerLabel(p) {
-    if(p < 0.05) return "CLOAK";
-    if(p < 0.15) return "LOW";
-    if(p < 0.5)  return "MED";
-    if(p < 1.0)  return "HIGH";
-    return "LOUD";
-}
-
 function updatePowerGauge(fp, sp, fieldMode) {
-    // Primary: field power (what the user sees on screen = |p_total|²)
     const el  = document.getElementById("power-number");
     const bar = document.getElementById("power-bar");
     const col = powerColor(fp);
-
     el.textContent = fp.toFixed(3);
     el.style.color = col;
-
-    const pct = Math.min(100, fp * 80);
-    bar.style.width      = pct + "%";
+    bar.style.width      = Math.min(100, fp * 80) + "%";
     bar.style.background = col;
-
-    // Secondary label
-    document.getElementById("power-scatter-lbl").textContent =
-        "scatter: " + sp.toFixed(3);
-
-    // Sparkline tracks whichever metric is being optimised
+    document.getElementById("power-scatter-lbl").textContent = "scatter: " + sp.toFixed(3);
     powerHistory.push(fieldMode ? fp : sp);
     if(powerHistory.length > SPARK_LEN) powerHistory.shift();
     drawSparkline();
@@ -342,12 +401,9 @@ function drawSparkline() {
     const W = c.width, H = c.height;
     spkCtx.clearRect(0,0,W,H);
     if(powerHistory.length < 2) return;
-
     const mx = Math.max(...powerHistory, 0.1);
     const toY = v => H - 2 - (v/mx)*(H-4);
     const toX = i => i/(SPARK_LEN-1)*W;
-
-    // Fill
     spkCtx.beginPath();
     spkCtx.moveTo(toX(0), H);
     powerHistory.forEach((v,i)=>spkCtx.lineTo(toX(i*(SPARK_LEN/powerHistory.length)), toY(v)));
@@ -355,22 +411,114 @@ function drawSparkline() {
     spkCtx.closePath();
     spkCtx.fillStyle="rgba(74,159,255,0.12)";
     spkCtx.fill();
-
-    // Line, coloured by value
     for(let i=1;i<powerHistory.length;i++){
         const x0=toX((i-1)*(SPARK_LEN/powerHistory.length));
         const x1=toX(i*(SPARK_LEN/powerHistory.length));
-        const y0=toY(powerHistory[i-1]), y1=toY(powerHistory[i]);
         spkCtx.strokeStyle=powerColor(powerHistory[i]);
         spkCtx.lineWidth=1.5;
-        spkCtx.beginPath(); spkCtx.moveTo(x0,y0); spkCtx.lineTo(x1,y1); spkCtx.stroke();
+        spkCtx.beginPath(); spkCtx.moveTo(x0,toY(powerHistory[i-1])); spkCtx.lineTo(x1,toY(powerHistory[i])); spkCtx.stroke();
     }
-
-    // Zero-line at p=0
     spkCtx.strokeStyle="#1f2a40"; spkCtx.lineWidth=0.5;
     spkCtx.setLineDash([2,4]);
     spkCtx.beginPath(); spkCtx.moveTo(0,H-2); spkCtx.lineTo(W,H-2); spkCtx.stroke();
     spkCtx.setLineDash([]);
+}
+
+// ── Polar far-field plot ───────────────────────────────────────────────────────
+function drawPolarPlot(rcs, alpha) {
+    const W = polarCvs.width, H = polarCvs.height;
+    const cx = W/2, cy = H/2;
+    const R  = Math.min(cx, cy) - 9;
+    const N  = rcs.length;
+    const p  = polarCtx;
+
+    p.clearRect(0, 0, W, H);
+
+    // Dark background fill
+    p.fillStyle = "#0b0f1e";
+    p.fillRect(0, 0, W, H);
+
+    // Grid circles (3 rings)
+    for(let i=1; i<=3; i++) {
+        p.strokeStyle = i===3 ? "#1f2a40" : "#161f30";
+        p.lineWidth = 0.8;
+        p.beginPath(); p.arc(cx, cy, R*i/3, 0, 2*Math.PI); p.stroke();
+    }
+    // Grid spokes (8 directions)
+    p.strokeStyle = "#161f30";
+    p.lineWidth = 0.5;
+    for(let i=0; i<8; i++) {
+        const a = i * Math.PI/4;
+        p.beginPath();
+        p.moveTo(cx, cy);
+        p.lineTo(cx + R*Math.cos(a), cy - R*Math.sin(a));
+        p.stroke();
+    }
+
+    // Compute max & dB label
+    let maxRcs = 1e-20;
+    for(let i=0; i<N; i++) if(rcs[i]>maxRcs) maxRcs = rcs[i];
+    const maxDb = (10*Math.log10(maxRcs)).toFixed(1);
+    document.getElementById("polar-maxlbl").textContent = maxDb + " dBm";
+
+    // Snapshot reference overlay (dashed gray, normalised to its own peak)
+    if(snapshotFF) {
+        let maxSnap = 1e-20;
+        for(let i=0; i<N; i++) if(snapshotFF[i]>maxSnap) maxSnap=snapshotFF[i];
+        p.beginPath();
+        for(let i=0; i<=N; i++) {
+            const phi = (i%N)*2*Math.PI/N;
+            const r   = Math.sqrt(snapshotFF[i%N]/maxSnap)*R;
+            const x=cx+r*Math.cos(phi), y=cy-r*Math.sin(phi);
+            i===0?p.moveTo(x,y):p.lineTo(x,y);
+        }
+        p.closePath();
+        p.strokeStyle="rgba(180,140,60,0.55)"; p.lineWidth=1.2;
+        p.setLineDash([3,4]); p.stroke(); p.setLineDash([]);
+        const snapDb=(10*Math.log10(maxSnap)).toFixed(1);
+        const sl=document.getElementById("snap-lbl");
+        sl.style.display="block"; sl.textContent="ref "+snapDb+" dBm";
+    }
+
+    // Pattern — amplitude scale: r ∝ sqrt(RCS/max) to show sidelobes clearly
+    p.beginPath();
+    for(let i=0; i<=N; i++) {
+        const phi = (i % N) * 2*Math.PI / N;
+        const r   = Math.sqrt(rcs[i%N] / maxRcs) * R;
+        const x   = cx + r*Math.cos(phi);
+        const y   = cy - r*Math.sin(phi);
+        i===0 ? p.moveTo(x, y) : p.lineTo(x, y);
+    }
+    p.closePath();
+    p.fillStyle = "rgba(74,159,255,0.13)";
+    p.fill();
+    p.strokeStyle = "#4a9eff";
+    p.lineWidth = 1.5;
+    p.stroke();
+
+    // Incident-direction dashed line (wave travels from -alpha side to +alpha side)
+    const ia = alpha;
+    p.save();
+    p.strokeStyle = "rgba(255,255,160,0.45)";
+    p.lineWidth = 1;
+    p.setLineDash([3,4]);
+    p.beginPath();
+    p.moveTo(cx - R*Math.cos(ia)*1.05, cy + R*Math.sin(ia)*1.05);
+    p.lineTo(cx + R*Math.cos(ia)*1.05, cy - R*Math.sin(ia)*1.05);
+    p.stroke();
+    p.setLineDash([]);
+
+    // Arrowhead at forward-scatter end
+    const ax = cx + R*Math.cos(ia)*1.02, ay = cy - R*Math.sin(ia)*1.02;
+    const px = -Math.sin(ia)*4, py = -Math.cos(ia)*4;
+    p.fillStyle = "rgba(255,255,160,0.5)";
+    p.beginPath();
+    p.moveTo(ax, ay);
+    p.lineTo(ax - Math.cos(ia)*8 + px, ay + Math.sin(ia)*8 + py);
+    p.lineTo(ax - Math.cos(ia)*8 - px, ay + Math.sin(ia)*8 - py);
+    p.closePath();
+    p.fill();
+    p.restore();
 }
 
 // ── Frame parser ──────────────────────────────────────────────────────────────
@@ -387,11 +535,15 @@ function parseFrame(buf) {
     const scatPow   = v.getFloat32(off,true); off+=4;
     const optIter   = v.getInt32(off,true);   off+=4;
     const optBest   = v.getFloat32(off,true); off+=4;
-    const optMode   = v.getInt32(off,true);   off+=4;  // 1=field, 0=scatter
+    const optMode   = v.getInt32(off,true);   off+=4;
+    const srcFlag   = v.getInt32(off,true);   off+=4;
+    const frameSrcX = v.getFloat32(off,true); off+=4;
+    const frameSrcY = v.getFloat32(off,true); off+=4;
 
-    const pRe  = new Float32Array(buf,off,NX*NY); off+=FIELD_BYTES;
-    const pIm  = new Float32Array(buf,off,NX*NY); off+=FIELD_BYTES;
-    const mask = new Uint8Array(buf,off,NX*NY);    off+=MASK_BYTES;
+    const pRe     = new Float32Array(buf,off,NX*NY); off+=FIELD_BYTES;
+    const pIm     = new Float32Array(buf,off,NX*NY); off+=FIELD_BYTES;
+    const mask    = new Uint8Array(buf,off,NX*NY);    off+=MASK_BYTES;
+    const farField= new Float32Array(buf,off,N_FF);   off+=FF_BYTES;
 
     const shapeMeta=[];
     for(let i=0;i<nShapes;i++){
@@ -405,13 +557,16 @@ function parseFrame(buf) {
         boundaries.push({sid,pts});
     }
     return{frameNum,solveMs,k,alpha,nShapes,nRec,flags,fieldPow,scatPow,optIter,optBest,optMode,
-           pRe,pIm,mask,boundaries};
+           srcFlag,frameSrcX,frameSrcY,pRe,pIm,mask,farField,boundaries};
 }
 
 // ── Render ────────────────────────────────────────────────────────────────────
 function renderFrame(f) {
     const{pRe,pIm,mask,boundaries,k,alpha,solveMs,frameNum,nRec,
-          fieldPow,scatPow,optIter,optBest,optMode,flags}=f;
+          fieldPow,scatPow,optIter,optBest,optMode,flags,farField,
+          srcFlag,frameSrcX,frameSrcY}=f;
+    // keep local src state in sync with server
+    if(srcFlag!==undefined){ srcX=frameSrcX; srcY=frameSrcY; }
     const W=canvas.width, H=canvas.height;
     let field,cmap,vmin,vmax;
 
@@ -462,6 +617,29 @@ function renderFrame(f) {
     ctx.closePath(); ctx.fill();
     ctx.restore();
 
+    // Point source marker (yellow ★ with pulse ring)
+    if(srcPoint){
+        const sx_=(srcX+DOMAIN)/(2*DOMAIN)*W, sy_=(DOMAIN-srcY)/(2*DOMAIN)*H;
+        ctx.save();
+        // pulse ring
+        ctx.beginPath(); ctx.arc(sx_,sy_,10,0,Math.PI*2);
+        ctx.strokeStyle="rgba(255,220,0,0.35)"; ctx.lineWidth=6; ctx.stroke();
+        // star body
+        ctx.beginPath(); ctx.arc(sx_,sy_,5,0,Math.PI*2);
+        ctx.fillStyle="#ffdd00"; ctx.fill();
+        ctx.strokeStyle="#fff8a0"; ctx.lineWidth=1.5; ctx.stroke();
+        // crosshair spokes
+        ctx.strokeStyle="rgba(255,240,100,0.7)"; ctx.lineWidth=1;
+        for(let a=0;a<4;a++){
+            const ang=a*Math.PI/2;
+            ctx.beginPath();
+            ctx.moveTo(sx_+7*Math.cos(ang),sy_+7*Math.sin(ang));
+            ctx.lineTo(sx_+14*Math.cos(ang),sy_+14*Math.sin(ang));
+            ctx.stroke();
+        }
+        ctx.restore();
+    }
+
     // Obstacle boundaries
     for(const{sid,pts} of boundaries){
         const idx=shapes.findIndex(s=>s.id===sid);
@@ -479,8 +657,11 @@ function renderFrame(f) {
         ctx.restore();
     }
 
-    // Power gauge — show field power (intensity dampening) as primary
+    // Power gauge
     updatePowerGauge(fieldPow, scatPow, optMode===1);
+
+    // Polar plot
+    drawPolarPlot(farField, alpha);
 
     // Optimiser status
     const isOpt = !!(flags & 16);
@@ -490,7 +671,6 @@ function renderFrame(f) {
         document.getElementById("btn-optimise").classList.add("running");
         document.getElementById("btn-optimise").textContent="⚡ Running…";
     } else if(optimising && !isOpt){
-        // Just finished
         optimising=false;
         document.getElementById("btn-optimise").classList.remove("running");
         document.getElementById("btn-optimise").textContent="⚡ Optimise";
@@ -509,7 +689,17 @@ function renderFrame(f) {
     document.getElementById("st-panels").textContent=curN;
     re.textContent=nRec; re.className=curN>=nRec?"good":"warn";
 
-    // Sync sliders when server is sweeping
+    // Resolution safety rail
+    const ppwDiv=document.getElementById("ppw-warn");
+    if(curN < nRec){
+        const lam=(2*Math.PI/k); const ppw=(curN/(2*Math.PI))*lam;
+        document.getElementById("ppw-warn-text").textContent=
+            `⚠ ~${ppw.toFixed(1)} panels/λ — recommend ≥ ${nRec} for k=${k.toFixed(1)}.  Raise Panels slider to avoid artefacts.`;
+        ppwDiv.classList.add("visible");
+    } else {
+        ppwDiv.classList.remove("visible");
+    }
+
     syncSlider("sl-k",     k,                 "k-val",    v=>v.toFixed(1));
     syncSlider("sl-alpha", alpha*180/Math.PI,  "alpha-val",v=>v.toFixed(0)+"°");
     document.getElementById("lambda-lbl").textContent="λ="+lam;
@@ -564,6 +754,94 @@ function syncShapesFromFrame(f){
     rebuildShapeList();
 }
 
+// ── Presets ───────────────────────────────────────────────────────────────────
+// Crystal: 4×4 square lattice of circles.
+//   Lattice constant d=1.5  →  k_Bragg ≈ π/d ≈ 2.09
+//   Try k≈2.0–2.2 to see the Bragg band gap snap the field off.
+//   16 circles × 60 panels each = 960 total — GPU-BEM handles it easily.
+//
+// Waveguide: two rows of circles forming a pressure-release channel.
+//   Channel width ≈ 2.8  →  single mode near k≈2.2 (λ≈2.9)
+//
+// Double Slit: three rectangles leaving two slit apertures.
+//   Slit width ≈ 1.0, separation ≈ 2.0  →  diffraction fringes at k≈6–10.
+
+// Presets: shapes fn + optional extra (bc_type / src_type / k applied on load)
+const PRESETS = {
+    crystal: {
+        shapes: () => {
+            const d=1.5,r=0.25,sh=[];
+            for(let iy=0;iy<4;iy++) for(let ix=0;ix<4;ix++)
+                sh.push({type:'circle',cx:(ix-1.5)*d,cy:(iy-1.5)*d,params:{r}});
+            return sh;
+        },
+    },
+    waveguide: {
+        shapes: () => {
+            const sh=[],xs=[-3.5,-2.1,-0.7,0.7,2.1,3.5],r=0.55;
+            for(const x of xs){
+                sh.push({type:'circle',cx:x,cy: 2.1,params:{r}});
+                sh.push({type:'circle',cx:x,cy:-2.1,params:{r}});
+            }
+            return sh;
+        },
+    },
+    double_slit: {
+        shapes: () => [
+            {type:'rect',cx:-3.5,cy:0,params:{w:3.5,h:0.7}},
+            {type:'rect',cx: 0,  cy:0,params:{w:1.2,h:0.7}},
+            {type:'rect',cx: 3.5,cy:0,params:{w:3.5,h:0.7}},
+        ],
+    },
+    // Lloyd's Mirror: long flat rigid wall + point source above it.
+    // Hard BC: reflected wave is in-phase → hyperbolic constructive fringes.
+    // Soft BC: 180° phase flip → pressure null at the wall surface.
+    lloyds_mirror: {
+        shapes: () => [{type:'rect',cx:0,cy:-2.2,params:{w:11.0,h:0.25}}],
+        extra:  {bc_type:'hard', src_type:'point', src_x:-3.5, src_y:0.8, k:8.0},
+    },
+};
+
+function applyPresetExtra(extra) {
+    if(!extra) return;
+    if(extra.bc_type !== undefined){
+        const isHard = extra.bc_type === 'hard';
+        bcHard = isHard;
+        const btn = document.getElementById('btn-bc');
+        btn.classList.toggle('hard-act', isHard);
+        btn.textContent = isHard ? 'BC: Hard' : 'BC: Soft';
+        send({bc_type: extra.bc_type});
+    }
+    if(extra.src_type !== undefined){
+        const isPoint = extra.src_type === 'point';
+        srcPoint = isPoint;
+        if(extra.src_x !== undefined) srcX = extra.src_x;
+        if(extra.src_y !== undefined) srcY = extra.src_y;
+        const btn = document.getElementById('btn-src');
+        btn.classList.toggle('pt-act', isPoint);
+        btn.textContent = isPoint ? 'Src: Point' : 'Src: Plane';
+        send({src_type: extra.src_type, src_x: srcX, src_y: srcY});
+    }
+    if(extra.k !== undefined){
+        const sl = document.getElementById('sl-k');
+        sl.value = extra.k;
+        document.getElementById('k-val').textContent = extra.k.toFixed(1);
+        document.getElementById('lambda-lbl').textContent = 'λ='+(2*Math.PI/extra.k).toFixed(2);
+        send({k: extra.k});
+    }
+}
+
+document.getElementById("btn-load-preset").onclick = () => {
+    const name = document.getElementById("sel-preset").value;
+    const pr   = PRESETS[name];
+    if(!pr) return;
+    const sh = pr.shapes();
+    if(!sh.length) return;
+    selectedId=null; shapes=[]; rebuildShapeList();
+    send({set_shapes: sh});
+    applyPresetExtra(pr.extra||null);
+};
+
 // ── Canvas drag ───────────────────────────────────────────────────────────────
 function canvasToPhys(e){
     const r=canvas.getBoundingClientRect();
@@ -574,22 +852,28 @@ function nearestShape(px,py){
     for(const sh of shapes){const d=(sh.cx-px)**2+(sh.cy-py)**2; if(d<bd){bd=d;best=sh.id;}}
     return best;
 }
+function nearSrc(px,py){
+    // true if click is within 0.6 m (physics units) of the point source
+    return srcPoint && ((px-srcX)**2+(py-srcY)**2 < 0.36);
+}
 
 canvas.addEventListener("mousedown",e=>{
     const[px,py]=canvasToPhys(e);
+    if(nearSrc(px,py)){ draggingSrc=true; return; }
     const id=nearestShape(px,py);
     if(id!==null){selectedId=id; rebuildShapeList();}
     dragging=true;
     if(selectedId!==null){const sh=shapes.find(s=>s.id===selectedId); if(sh){sh.cx=px;sh.cy=py;} send({move_shape:{id:selectedId,cx:px,cy:py}});}
 });
 canvas.addEventListener("mousemove",e=>{
-    if(!dragging||selectedId===null) return;
     const[px,py]=canvasToPhys(e);
+    if(draggingSrc){ srcX=px; srcY=py; send({src_x:px,src_y:py}); return; }
+    if(!dragging||selectedId===null) return;
     const sh=shapes.find(s=>s.id===selectedId); if(sh){sh.cx=px;sh.cy=py;}
     send({move_shape:{id:selectedId,cx:px,cy:py}});
 });
-canvas.addEventListener("mouseup",  ()=>dragging=false);
-canvas.addEventListener("mouseleave",()=>dragging=false);
+canvas.addEventListener("mouseup",  ()=>{dragging=false;draggingSrc=false;});
+canvas.addEventListener("mouseleave",()=>{dragging=false;draggingSrc=false;});
 
 canvas.addEventListener("touchstart",e=>{e.preventDefault(); const[px,py]=canvasToPhys(e.touches[0]); const id=nearestShape(px,py); if(id!==null){selectedId=id;rebuildShapeList();} dragging=true; if(selectedId!==null) send({move_shape:{id:selectedId,cx:px,cy:py}});},{passive:false});
 canvas.addEventListener("touchmove", e=>{e.preventDefault(); if(!dragging||selectedId===null) return; const[px,py]=canvasToPhys(e.touches[0]); send({move_shape:{id:selectedId,cx:px,cy:py}});},{passive:false});
@@ -606,7 +890,6 @@ function connect(){
             hasFortran  = caps.has_fortran  || false;
             hasGpuBem   = caps.has_gpu_bem  || false;
             refreshSolverBtnOpacity();
-            // Build tooltip listing available solvers
             const avail = ['SciPy'];
             if(hasFortran) avail.push('Fortran LU-IR');
             if(hasGpuBem)  avail.push('GPU-BEM (CUDA+GMRES)');
@@ -628,7 +911,6 @@ function connect(){
     ws.onclose=()=>setTimeout(connect,1000);
     ws.onerror=()=>ws.close();
 }
-
 function send(obj){if(ws&&ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify(obj));}
 
 // ── Controls ──────────────────────────────────────────────────────────────────
@@ -663,6 +945,33 @@ document.getElementById("sel-display").onchange=e=>{
     displayMode=e.target.value; if(lastFrame) renderFrame(lastFrame);
 };
 document.getElementById("btn-solver").onclick = cycleSolver;
+document.getElementById("btn-bc").onclick=e=>{
+    bcHard=!bcHard;
+    e.target.classList.toggle("hard-act", bcHard);
+    e.target.textContent = bcHard ? "BC: Hard" : "BC: Soft";
+    send({bc_type: bcHard ? "hard" : "soft"});
+};
+document.getElementById("btn-snapshot").onclick=e=>{
+    if(!lastFrame) return;
+    snapshotFF = lastFrame.farField.slice();   // copy
+    e.target.classList.add("snap-on");
+    document.getElementById("btn-clr-snap").style.display="inline";
+    if(lastFrame) drawPolarPlot(lastFrame.farField, lastFrame.alpha);
+};
+document.getElementById("btn-clr-snap").onclick=()=>{
+    snapshotFF=null;
+    document.getElementById("btn-snapshot").classList.remove("snap-on");
+    document.getElementById("btn-clr-snap").style.display="none";
+    document.getElementById("snap-lbl").style.display="none";
+    if(lastFrame) drawPolarPlot(lastFrame.farField, lastFrame.alpha);
+};
+document.getElementById("btn-src").onclick=e=>{
+    srcPoint=!srcPoint;
+    e.target.classList.toggle("pt-act", srcPoint);
+    e.target.textContent = srcPoint ? "Src: Point" : "Src: Plane";
+    if(srcPoint){ send({src_type:"point", src_x:srcX, src_y:srcY}); }
+    else         { send({src_type:"plane"}); }
+};
 document.getElementById("btn-gpu").onclick=e=>{
     useGpu=!useGpu; e.target.classList.toggle("active",useGpu);
     e.target.textContent=useGpu?"GPU: On":"GPU: Off"; send({use_gpu:useGpu});
@@ -677,7 +986,7 @@ function setOptMode(mode) {
     document.getElementById("btn-mode-scatter").style.color      = isField ? "#aab"    : "#a4f";
     send({opt_mode: mode});
 }
-setOptMode("field");   // initialise styling
+setOptMode("field");
 
 document.getElementById("btn-optimise").onclick=()=>{
     if(optimising) return;
