@@ -158,8 +158,7 @@ Even at n_core = 1,000 — a core set consuming 46% of the N=2,193 reference pop
 
 The mathematical reason is structural. APY applies the Sherman-Morrison-Woodbury identity to the core block:
 
-<img width="678" height="106" alt="image" src="https://github.com/user-attachments/assets/dbad5c4d-a04b-431f-9b5d-3efdf0f79339" />
-
+![alt text](<Screenshot From 2026-06-07 11-34-42-1.png>)
 
 <!-- LaTeX: \mathbf{G}^{-1} \approx \begin{bmatrix} \mathbf{G}_{pp}^{-1} & -\mathbf{G}_{pp}^{-1}\mathbf{G}_{pn}\mathbf{D}_{n}^{-1} \\ -\mathbf{D}_{n}^{-1}\mathbf{G}_{np}\mathbf{G}_{pp}^{-1} & \mathbf{D}_{n}^{-1} \end{bmatrix} -->
 
@@ -196,7 +195,7 @@ The industry's response — to retreat to group selection [4] — is the rationa
 
 The computational argument for APY was always contingent: if exact G-BLUP cannot be computed efficiently, approximation is necessary. We remove this contingency.
 
-The MPDOK solver (Matrix Product Dot Outer Kernel) computes the exact G-BLUP solution using TF32 LU factorisation on GPU with FP64 iterative refinement, achieving machine-precision residuals (~10⁻¹¹) at speeds that equal or exceed APY's computational pathway:
+The MPDOK (Mixed Precision Dense Operator Krylov) solver computes the exact G-BLUP solution using TF32 LU factorisation on GPU with FP64 iterative refinement, achieving machine-precision residuals (~10⁻¹¹) at speeds that equal or exceed APY's computational pathway:
 
 | Metric | APY (n_core=200) | MPDOK Exact |
 |---|---|---|
