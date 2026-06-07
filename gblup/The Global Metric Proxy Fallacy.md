@@ -158,7 +158,8 @@ Even at n_core = 1,000 — a core set consuming 46% of the N=2,193 reference pop
 
 The mathematical reason is structural. APY applies the Sherman-Morrison-Woodbury identity to the core block:
 
-![alt text](<Screenshot From 2026-06-07 11-34-42-1.png>)
+<img width="678" height="106" alt="image" src="https://github.com/user-attachments/assets/52dab947-5ec0-4c21-a868-0c5eeaa4e29b" />
+
 
 <!-- LaTeX: \mathbf{G}^{-1} \approx \begin{bmatrix} \mathbf{G}_{pp}^{-1} & -\mathbf{G}_{pp}^{-1}\mathbf{G}_{pn}\mathbf{D}_{n}^{-1} \\ -\mathbf{D}_{n}^{-1}\mathbf{G}_{np}\mathbf{G}_{pp}^{-1} & \mathbf{D}_{n}^{-1} \end{bmatrix} -->
 
