@@ -138,6 +138,22 @@ The assembly notebook. Four panels of evidence:
 
 ---
 
+## Notebook 5 — `05_thesis.ipynb`: Exploration Targeting, Economic Impact, and Cross-Domain Thesis
+
+The capstone notebook translates mathematical results into drilling decisions and connects the mining structural limit to the identical failure mode across four industries.
+
+**Exploration targeting** (fig17): Framing the cross-validation as a ranked drilling campaign, MPDOK correctly ranks **2× as many true HG prospects** into the top-10 targets as FRK m=20 (8 vs 4). At a 50-target campaign the advantage is +4 sites. Average Precision (AUC of Precision-Recall curve): MPDOK 0.41 vs FRK m=20 0.25 — a 65% relative improvement in ranking quality.
+
+**Economic impact** (fig18): At $1M per target drilled and $50M NPV per HG discovery confirmed, the 50-target campaign generates **$200M more net value under MPDOK than FRK m=20** ($1,150M vs $950M). The economic waterfall shows how the extra 4 HG discoveries more than compensate for the fixed drilling cost.
+
+**The masking curve** (fig19): The MPDOK vs FRK advantage scales as approximately $37 \times (1 - \text{nugget fraction})$ percentage points. At 55.7% nugget (real Au stream sediment) the gap compresses to ~13pp. At 6% nugget (synthetic / drillhole data) the gap expands to 42pp. Practitioners who assess FRK adequacy using stream-sediment Au cross-validation will systematically underestimate the structural problem.
+
+**Cross-domain thesis** (fig20): The four-field table — Mining, Aerospace, Genomics, Portfolio — with actual performance numbers from each lab, demonstrating that one architectural decision (rank-k proxy) produces one failure mode (spectral tail blindness) across four industries.
+
+*Figures*: `fig17` (top-k precision-recall), `fig18` (economic waterfall), `fig19` (masking curve), `fig20` (cross-domain thesis).
+
+---
+
 ## The Economic Trap
 
 A mining company relying on FRK at operational ranks faces two symmetric cost categories that together constitute a capital allocation trap:
@@ -204,15 +220,17 @@ The nugget was masking the failure. The failure was always there. MPDOK exposes 
 02_variogram.ipynb     Fit variogram, run FRK + MPDOK cross-validation on real Au
 03_mpdok.ipynb         Synthetic nested-Matérn control experiment at NURE locations
 04_comparison.ipynb    Spacing analysis, spectral proof, grand summary figures
+05_thesis.ipynb        Exploration targeting, economic impact, cross-domain thesis
 
 mining_phase1.npz      Eigenspectrum, 800×800 distance matrix, variogram statistics
 mining_phase2.npz      FRK/MPDOK cross-validation results on real Au
 mining_phase3.npz      FRK/MPDOK results on synthetic nested field
 mining_phase4.npz      Spacing analysis, nested eigenspectrum, improvement arrays
+mining_phase5.npz      Top-k found arrays, economic net values, masking curve
 
 nevada_nure_raw.csv    Raw NURE-HSSR Nevada data (13,828 records, 6.5 MB)
 
-fig01–fig16            All figures (PNG, 150 dpi)
+fig01–fig20            All figures (PNG, 150 dpi)
 ```
 
 ---
