@@ -13,6 +13,8 @@ This lab asks: *given the same freely available atmospheric data and the same 30
 
 The answer is more striking than we expected.
 
+https://youtu.be/vozGVjkJSBs?si=Txg3GS9ht84M1PFQ
+
 ---
 
 ## The Data
