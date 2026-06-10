@@ -30,6 +30,22 @@ import warnings
 import cupy as cp
 import numpy as np
 
+# Kernel status codes shared by py_gmres_ir / py_lu_ir / py_lu_solve_factored
+# (v1.1: converged_out is tri-state — negative values are hard errors and
+# must NOT be treated as success; note `not converged.value` is False for
+# negatives, which is why errors are checked explicitly below).
+_KERNEL_ERRORS = {
+    -1: "invalid arguments or no factorization available",
+    -2: "CUDA/cuBLAS/cuSOLVER runtime failure (see stderr for context)",
+    -3: "matrix is singular in FP32 (zero pivot in Sgetrf)",
+}
+
+
+def _raise_on_kernel_error(converged, where):
+    if converged < 0:
+        detail = _KERNEL_ERRORS.get(converged, "unknown error")
+        raise RuntimeError(f"{where}: kernel error {converged} — {detail}")
+
 
 class _ManagedArray:
     """CuPy array backed by Fortran-managed memory.
@@ -209,8 +225,14 @@ class LUIRSolver:
             ctypes.byref(info),
         )
         cp.cuda.Stream.null.synchronize()
+        if info.value > 0:
+            raise RuntimeError(
+                f"py_lu_factor: matrix is singular in FP32 — zero pivot at "
+                f"U({info.value},{info.value})")
         if info.value != 0:
-            raise RuntimeError(f"py_lu_factor failed: info={info.value}")
+            raise RuntimeError(f"py_lu_factor failed: info={info.value} "
+                               f"(-999 invalid args, -998 handle creation, "
+                               f"-997 cuSOLVER call failed)")
 
     def solve_factored(self, b, tol=1e-11, maxiter_outer=3):
         """Solve Ax=b using the LU factors from the last factor() call.
@@ -245,6 +267,7 @@ class LUIRSolver:
         cp.cuda.Stream.null.synchronize()
         if converged.value == -1:
             raise RuntimeError("solve_factored: no factorization available — call factor(A) first.")
+        _raise_on_kernel_error(converged.value, "LU-IR solve_factored")
         if not converged.value:
             warnings.warn(
                 f"LU-IR solve_factored did not converge to tol={tol:.1e} "
@@ -328,6 +351,7 @@ class LUIRSolver:
         cp.cuda.Stream.null.synchronize()
         del lu_buf   # CuPy calls cudaFree immediately — no leak
 
+        _raise_on_kernel_error(converged.value, "LU-IR solve")
         if not converged.value:
             warnings.warn(
                 f"LU-IR did not converge to tol={tol:.1e} within "
@@ -515,6 +539,7 @@ class MPDOKSolver:
         )
         cp.cuda.Stream.null.synchronize()
 
+        _raise_on_kernel_error(converged.value, "GMRES-IR solve")
         if not converged.value:
             warnings.warn(
                 f"GMRES-IR did not converge to tol={tol:.1e} within "
