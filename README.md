@@ -6,7 +6,7 @@
 **Question posed**: Can the tensor core engine accelerate iterative solvers in a way that creates value for users who are not GPU experts?
 
 ---
-June 10: code review by Fable 5 resulted in v1.1 (details at bottom)
+June 10: code review by Fable 5 resulted in v2.1 (details at bottom)
 
 May 24: added academic notebook and NotebookLM powered explanations, with video: https://youtu.be/OFuq1uzfLJM?si=zIOMLfz-evhqBtAE
 
@@ -106,8 +106,8 @@ The name captures all three stages: mixed precision is the mechanism, dense-oper
 - Prior memory: Ozaki 5×FP32 gives ~1e-7 precision; expm squaring safe only for orthogonal matrices
 
 ---
-## v1.1 fixes:
-v1.1 (code review fixes on June 10, 2026):
+## v2.1 fixes:
+v2.1 (code review fixes on June 10, 2026):
 -   B1  lucky-breakdown path now applies the Givens rotations to the final Hessenberg column before back-substitution
 -   B2  Givens rotation guards rho against zero — no NaN can reach x
 -   B3  N / restart / maxiter_outer validated
