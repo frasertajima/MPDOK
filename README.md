@@ -102,3 +102,13 @@ The name captures all three stages: mixed precision is the mechanism, dense-oper
 - `PLAN_V5.md` — v5 engine: cuBLAS-lt epilogue fusion, benchmark results (completed May 2026)
 - Benchmark results in `PLAN_V5.md §Completed` — crossover at ~128³, fc1/fc2/fc3 shapes validated
 - Prior memory: Ozaki 5×FP32 gives ~1e-7 precision; expm squaring safe only for orthogonal matrices
+
+---
+## v1.1 fixes:
+v1.1 (code review fixes on June 10, 2026):
+-   B1  lucky-breakdown path now applies the Givens rotations to the final Hessenberg column before back-substitution
+-   B2  Givens rotation guards rho against zero — no NaN can reach x
+-   B3  N / restart / maxiter_outer validated
+-   R1  converged_out is tri-state: 1 = converged, 0 = max outer iterations, -1 = invalid arguments, -2 = CUDA/cuBLAS runtime failure
+-   R2  cuBLAS handle cached in module state (was create/destroy per solve)
+-   P1  inner workspace allocated once per solve (was per outer iteration)
